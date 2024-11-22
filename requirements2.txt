@@ -1,0 +1,11 @@
+torch>=2.0.0
+transformers>=4.45.2
+huggingface-hub
+numpy
+tokenizers
+filelock
+requests
+tqdm
+pyyaml
+packaging
+safetensors

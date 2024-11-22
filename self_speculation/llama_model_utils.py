@@ -11,14 +11,18 @@ from typing import List, Optional, Tuple
 import torch
 import transformers
 
+
 @dataclass
 class ForwardResult:
     logits: torch.Tensor
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]]
     exit_query_cache: Optional[List[torch.Tensor]] = None
 
+
 # Copied from transformers.models.bart.modeling_bart.BartDecoder._prepare_decoder_attention_mask
-def _prepare_decoder_attention_mask(model, attention_mask, input_shape, inputs_embeds, past_key_values_length):
+def _prepare_decoder_attention_mask(
+    model, attention_mask, input_shape, inputs_embeds, past_key_values_length
+):
     # create causal mask
     # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
     combined_attention_mask = None
@@ -32,18 +36,24 @@ def _prepare_decoder_attention_mask(model, attention_mask, input_shape, inputs_e
 
     if attention_mask is not None:
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-        expanded_attn_mask = _expand_mask(attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1]).to(
-            inputs_embeds.device
-        )
+        expanded_attn_mask = _expand_mask(
+            attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1]
+        ).to(inputs_embeds.device)
         combined_attention_mask = (
-            expanded_attn_mask if combined_attention_mask is None else expanded_attn_mask + combined_attention_mask
+            expanded_attn_mask
+            if combined_attention_mask is None
+            else expanded_attn_mask + combined_attention_mask
         )
 
     return combined_attention_mask
 
+
 # Copied from transformers.models.bart.modeling_bart._make_causal_mask
 def _make_causal_mask(
-    input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device, past_key_values_length: int = 0
+    input_ids_shape: torch.Size,
+    dtype: torch.dtype,
+    device: torch.device,
+    past_key_values_length: int = 0,
 ):
     """
     Make causal mask used for bi-directional self-attention.
@@ -55,8 +65,19 @@ def _make_causal_mask(
     mask = mask.to(dtype)
 
     if past_key_values_length > 0:
-        mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
-    return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
+        mask = torch.cat(
+            [
+                torch.zeros(
+                    tgt_len, past_key_values_length, dtype=dtype, device=device
+                ),
+                mask,
+            ],
+            dim=-1,
+        )
+    return mask[None, None, :, :].expand(
+        bsz, 1, tgt_len, tgt_len + past_key_values_length
+    )
+
 
 # Copied from transformers.models.bart.modeling_bart._expand_mask
 def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] = None):
@@ -70,7 +91,10 @@ def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] 
 
     inverted_mask = 1.0 - expanded_mask
 
-    return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
+    return inverted_mask.masked_fill(
+        inverted_mask.to(torch.bool), torch.finfo(dtype).min
+    )
+
 
 def top_k_top_p_filtering(
     logits: torch.FloatTensor,
@@ -95,16 +119,21 @@ def top_k_top_p_filtering(
     From: https://gist.github.com/thomwolf/1a5a29f6962089e871b94cbd09daf317
     """
     if top_k > 0:
-        logits = transformers.generation.logits_process.TopKLogitsWarper(top_k=top_k, filter_value=filter_value, min_tokens_to_keep=min_tokens_to_keep)(
-            None, logits
-        )
+        logits = transformers.generation.logits_process.TopKLogitsWarper(
+            top_k=top_k,
+            filter_value=filter_value,
+            min_tokens_to_keep=min_tokens_to_keep,
+        )(None, logits)
 
     if 0 <= top_p <= 1.0:
-        logits = transformers.generation.logits_process.TopPLogitsWarper(top_p=top_p, filter_value=filter_value, min_tokens_to_keep=min_tokens_to_keep)(
-            None, logits
-        )
+        logits = transformers.generation.logits_process.TopPLogitsWarper(
+            top_p=top_p,
+            filter_value=filter_value,
+            min_tokens_to_keep=min_tokens_to_keep,
+        )(None, logits)
 
     return logits
+
 
 def decode_next_token(
     logits: torch.Tensor,
@@ -123,7 +152,9 @@ def decode_next_token(
     else:
         if not token_idx:
             logits.squeeze_(dim=0)
-        filtered_logits = top_k_top_p_filtering(logits / temperature, top_k=top_k, top_p=top_p)
+        filtered_logits = top_k_top_p_filtering(
+            logits / temperature, top_k=top_k, top_p=top_p
+        )
         probabilities = torch.nn.functional.softmax(filtered_logits, dim=-1)
         next_token = torch.multinomial(probabilities, num_samples=1)
         if not token_idx:
@@ -137,7 +168,11 @@ def crop_past_key_values(
 ) -> List[Tuple[torch.Tensor, torch.Tensor]]:
     new_past: List[Tuple[torch.Tensor, torch.Tensor]] = []
     for idx in range(len(past_key_values)):
-        if past_key_values[idx] is None or past_key_values[idx][0] == [] or past_key_values[idx][0] is None:
+        if (
+            past_key_values[idx] is None
+            or past_key_values[idx][0] == []
+            or past_key_values[idx][0] is None
+        ):
             break
         new_past.append(
             (
@@ -166,7 +201,9 @@ def forward(
     if past_key_values is not None:
         past_key_values_length = past_key_values[0][0].shape[2]
         seq_length_with_past = seq_length_with_past + past_key_values_length
-    past_key_values = transformers.cache_utils.DynamicCache.from_legacy_cache(past_key_values)
+    past_key_values = transformers.cache_utils.DynamicCache.from_legacy_cache(
+        past_key_values
+    )
 
     position_ids = torch.arange(
         past_key_values_length,
@@ -204,9 +241,7 @@ def forward(
     hidden_states = model.model.norm(hidden_states)
     logits = model.lm_head(hidden_states)
 
-    return ForwardResult(
-        logits=logits, past_key_values=past_key_values
-    )
+    return ForwardResult(logits=logits, past_key_values=past_key_values)
 
 
 # TODO: update forward_early(...) to use transformers' new KV cache implementation rather than legacy.
@@ -226,7 +261,9 @@ def forward_early(
     if past_key_values is not None:
         past_key_values_length = past_key_values[0][0].shape[2]
         seq_length_with_past = seq_length_with_past + past_key_values_length
-    past_key_values = transformers.cache_utils.DynamicCache.from_legacy_cache(past_key_values)
+    past_key_values = transformers.cache_utils.DynamicCache.from_legacy_cache(
+        past_key_values
+    )
 
     position_ids = torch.arange(
         past_key_values_length,
@@ -249,7 +286,12 @@ def forward_early(
     )
 
     hidden_states = inputs_embeds
-    for decoder_layer in model.model.layers[:exit_layer]:
+
+    ##### AV #####
+    prev_token = None  # To keep track of the previous token for early exit logic.
+    token_repeats = 0  # Counter to track token repetition across layers.
+
+    for layer_idx, decoder_layer in enumerate(model.model.layers[:exit_layer]):
         hidden_states, past_key_values = decoder_layer(
             hidden_states,
             attention_mask=attention_mask,
@@ -260,9 +302,33 @@ def forward_early(
             padding_mask=None,
         )
 
+        # Get the predicted token from this layer's hidden states (last token predicted).
+        logits = model.lm_head(hidden_states)
+        predicted_token = logits.argmax(dim=-1)[
+            :, -1
+        ]  # Take the token with max probability.
+
+        # Check if the predicted token is the same as the previous layer's prediction.
+        if prev_token is not None and (predicted_token == prev_token).all():
+            token_repeats += 1
+        else:
+            token_repeats = 0
+
+        # Exit early if the same token is predicted for 3 consecutive layers.
+        if token_repeats >= 2:
+            print(f"Early exit triggered at layer {layer_idx} due to repeated token.")
+            return ForwardResult(
+                logits=logits,
+                past_key_values=past_key_values,
+                exit_query_cache=exit_query_cache,
+            )
+
+        prev_token = predicted_token  # Update the previous token.
+
+    ##### AV #####
+
     past_key_values = past_key_values.to_legacy_cache()
 
-    # next_cache = next_decoder_cache
     if exit_query_cache is None:
         exit_query_cache = hidden_states
     else:
@@ -272,7 +338,9 @@ def forward_early(
 
     logits = model.lm_head(hidden_states)
     return ForwardResult(
-        logits=logits, past_key_values=past_key_values, exit_query_cache=exit_query_cache
+        logits=logits,
+        past_key_values=past_key_values,
+        exit_query_cache=exit_query_cache,
     )
 
 
@@ -305,7 +373,9 @@ def forward_remainder(
             full_past_key_values_length = 0
 
         seq_length_with_past = num_tokens_to_generate + draft_past_key_values_length
-    past_key_values = transformers.cache_utils.DynamicCache.from_legacy_cache(past_key_values)
+    past_key_values = transformers.cache_utils.DynamicCache.from_legacy_cache(
+        past_key_values
+    )
 
     inputs_embeds = model.model.embed_tokens(input_ids)
 
@@ -387,5 +457,7 @@ def forward_remainder(
     logits = model.lm_head(hidden_states)
 
     return ForwardResult(
-        logits=logits, past_key_values=past_key_values, exit_query_cache=exit_query_cache
+        logits=logits,
+        past_key_values=past_key_values,
+        exit_query_cache=exit_query_cache,
     )
