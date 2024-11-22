@@ -317,6 +317,7 @@ def forward_early(
         # Exit early if the same token is predicted for 3 consecutive layers.
         if token_repeats >= 2:
             print(f"Early exit triggered at layer {layer_idx} due to repeated token.")
+            print(f"Predicted Token: {predicted_token}")
             return ForwardResult(
                 logits=logits,
                 past_key_values=past_key_values,
