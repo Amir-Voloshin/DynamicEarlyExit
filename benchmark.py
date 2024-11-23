@@ -18,6 +18,7 @@ import transformers
 from tqdm import tqdm
 
 from torchmetrics.text import BLEUScore, ROUGEScore, EditDistance
+
 # TODO: create ExactMatch torchmetrics.text
 
 from torcheval.metrics.aggregation.mean import Mean
@@ -37,9 +38,12 @@ from self_speculation.generator_base import (
     HuggingfaceLlamaGenerator,
 )
 
-from self_speculation.self_speculation_generator import SelfSpeculativeGenerationStrategy
+from self_speculation.self_speculation_generator import (
+    SelfSpeculativeGenerationStrategy,
+)
 
 log = logging.getLogger(__name__)
+
 
 @dataclass
 class BenchmarkArguments:
@@ -48,6 +52,7 @@ class BenchmarkArguments:
     random_shuffle: bool = True
     num_samples: Optional[int] = None
     n_shot: Optional[int] = 0
+
 
 @dataclass
 class EvaluationExample:
@@ -149,13 +154,14 @@ class EvaluationMetrics:
             tokens_per_second={"mean": Mean()},
         )
 
+
 def benchmark(
-        model: torch.nn.Module, 
-        tokenizer: transformers.PreTrainedTokenizerBase, 
-        benchmark_arguments: BenchmarkArguments, 
-        generation_config: GenerationConfig,
-        seed = None,
-    ):
+    model: torch.nn.Module,
+    tokenizer: transformers.PreTrainedTokenizerBase,
+    benchmark_arguments: BenchmarkArguments,
+    generation_config: GenerationConfig,
+    seed=None,
+):
     if generation_config.generation_strategy == "autoregressive":
         generation_strategy: GenerationStrategy = AutoRegressiveGenerationStrategy()
     elif generation_config.generation_strategy == "self_speculative":
@@ -198,15 +204,22 @@ def benchmark(
     return metric_result
 
 
-def main(args: Arguments, benchmark_arguments: BenchmarkArguments, generation_config: GenerationConfig, output_fname: str):
+def main(
+    args: Arguments,
+    benchmark_arguments: BenchmarkArguments,
+    generation_config: GenerationConfig,
+    output_fname: str,
+):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Log arguments at beginning
-    log.info(f"device={device}\n"
-             "args={args}\n"
-             "benchmark_arguments={benchmark_arguments}\n"
-             "generation_config={generation_config}\n"
-             "output_fname={output_fname}\n")
+    log.info(
+        f"device={device}\n"
+        "args={args}\n"
+        "benchmark_arguments={benchmark_arguments}\n"
+        "generation_config={generation_config}\n"
+        "output_fname={output_fname}\n"
+    )
 
     # Setup and Run Benchmark
     setup(args, device=device)
@@ -221,8 +234,13 @@ def main(args: Arguments, benchmark_arguments: BenchmarkArguments, generation_co
         json.dump(generation_config.__dict__, f)
         json.dump(metric_result, f)
 
-def process_cli_arguments() -> Tuple[arguments.Arguments, BenchmarkArguments, GenerationConfig]:
-    parser = transformers.HfArgumentParser((arguments.Arguments, BenchmarkArguments, GenerationConfig))
+
+def process_cli_arguments() -> (
+    Tuple[arguments.Arguments, BenchmarkArguments, GenerationConfig]
+):
+    parser = transformers.HfArgumentParser(
+        (arguments.Arguments, BenchmarkArguments, GenerationConfig)
+    )
     (
         general_arguments,
         benchmark_arguments,
@@ -231,13 +249,21 @@ def process_cli_arguments() -> Tuple[arguments.Arguments, BenchmarkArguments, Ge
     ) = parser.parse_args_into_dataclasses(return_remaining_strings=True)
 
     if general_arguments.model_args:
-        general_arguments.model_args = simple_parse_args_string(general_arguments.model_args)
+        general_arguments.model_args = simple_parse_args_string(
+            general_arguments.model_args
+        )
     else:
         general_arguments.model_args = {}
 
     return general_arguments, benchmark_arguments, generation_config
 
+
 if __name__ == "__main__":
     args, benchmark_arguments, generation_config = process_cli_arguments()
-    log.setLevel(level=logging.INFO) # TODO: set level based on argument
-    main(args, benchmark_arguments, generation_config, f"{args.output_dir}/benchmark_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+    log.setLevel(level=logging.INFO)  # TODO: set level based on argument
+    main(
+        args,
+        benchmark_arguments,
+        generation_config,
+        f"{args.output_dir}/benchmark_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+    )
