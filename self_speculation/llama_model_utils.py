@@ -7,6 +7,7 @@
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+from .early_exit_utils import compute_cosine_similarity
 
 import torch
 import transformers
@@ -245,12 +246,16 @@ def forward(
 
 
 # TODO: update forward_early(...) to use transformers' new KV cache implementation rather than legacy.
+import torch.nn.functional as F
+
+
 def forward_early(
     model: transformers.LlamaForCausalLM,
     input_ids: torch.Tensor,
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]],
     exit_layer: int,
     exit_query_cache: Optional[List[torch.Tensor]],
+    similarity_threshold: float = 0.95,  # Threshold for cosine similarity
 ) -> ForwardResult:
     device = input_ids.device
     batch_size, seq_length = input_ids.shape
@@ -288,8 +293,8 @@ def forward_early(
     hidden_states = inputs_embeds
 
     ##### AV #####
-    prev_token = None  # To keep track of the previous token for early exit logic.
-    token_repeats = 0  # Counter to track token repetition across layers.
+    # Cosine Similarity: Check for stabilization of token embeddings across layers
+    prev_hidden_states = None  # To store the hidden states from the previous layer
 
     for layer_idx, decoder_layer in enumerate(model.model.layers[:exit_layer]):
         hidden_states, past_key_values = decoder_layer(
@@ -302,33 +307,21 @@ def forward_early(
             padding_mask=None,
         )
 
-        # Get the predicted token from this layer's hidden states (last token predicted).
-        logits = model.lm_head(hidden_states)
-        predicted_token = logits.argmax(dim=-1)[
-            :, -1
-        ]  # Take the token with max probability.
+        # Checking cosine similarity and determining if to exit
+        result, exited_layer = compute_cosine_similarity(
+            hidden_states=hidden_states,
+            prev_hidden_states=prev_hidden_states,
+            similarity_threshold=similarity_threshold,
+            model=model,
+            past_key_values=past_key_values,
+            exit_query_cache=exit_query_cache,
+            layer_idx=layer_idx,
+        )
 
-        # Check if the predicted token is the same as the previous layer's prediction.
-        if prev_token is not None and (predicted_token == prev_token).all():
-            token_repeats += 1
-        else:
-            token_repeats = 0
+        if result is not None:
+            return result, exited_layer
 
-        # Exit early if the same token is predicted for 3 consecutive layers.
-        if token_repeats >= 2:
-            # print(f"Early exit triggered at layer {layer_idx} due to repeated token.")
-            return (
-                ForwardResult(
-                    logits=logits,
-                    past_key_values=past_key_values,
-                    exit_query_cache=exit_query_cache,
-                ),
-                layer_idx,
-            )
-
-        prev_token = predicted_token  # Update the previous token.
-
-    ##### AV #####
+        prev_hidden_states = hidden_states  # Update the previous hidden states
 
     past_key_values = past_key_values.to_legacy_cache()
 
@@ -339,11 +332,15 @@ def forward_early(
 
     hidden_states = model.model.norm(hidden_states)
 
+    # If no early exit, continue to the final layer.
     logits = model.lm_head(hidden_states)
-    return ForwardResult(
-        logits=logits,
-        past_key_values=past_key_values,
-        exit_query_cache=exit_query_cache,
+    return (
+        ForwardResult(
+            logits=logits,
+            past_key_values=past_key_values,
+            exit_query_cache=exit_query_cache,
+        ),
+        exit_layer - 1,
     )
 
 
