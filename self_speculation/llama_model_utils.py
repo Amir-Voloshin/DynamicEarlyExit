@@ -7,7 +7,7 @@
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-from .early_exit_utils import compute_cosine_similarity
+from .early_exit_utils import cosine_similarity_early_exit, token_repeat_early_exit
 
 import torch
 import transformers
@@ -254,9 +254,29 @@ def forward_early(
     input_ids: torch.Tensor,
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]],
     exit_layer: int,
-    exit_query_cache: Optional[List[torch.Tensor]],
-    similarity_threshold: float = 0.95,  # Threshold for cosine similarity
+    exit_query_cache: Optional[List[torch.Tensor]] = None,
+    similarity_threshold: float = 0.95,
+    repeats: int = 3,  # Threshold for repeated tokens
+    early_exit_criteria: str = "cosine_similarity",  # "cosine_similarity" or "token_repeat"
 ) -> ForwardResult:
+    """
+    Forward pass with early exit based on the chosen criterion.
+
+    Args:
+        model: The model to perform inference on.
+        input_ids: Input tensor.
+        past_key_values: Past key-values from the previous step, if available.
+        exit_layer: The maximum layer to process before exiting.
+        exit_query_cache: Cache for query representations if needed.
+        similarity_threshold: Threshold for cosine similarity-based early exit.
+        repeats: Number of repeated tokens for token repeat-based early exit.
+        early_exit_criteria: The criterion for early exit. Options are:
+                             - "cosine_similarity"
+                             - "token_repeat"
+
+    Returns:
+        ForwardResult and the index of the layer where early exit occurred.
+    """
     device = input_ids.device
     batch_size, seq_length = input_ids.shape
 
@@ -291,10 +311,11 @@ def forward_early(
     )
 
     hidden_states = inputs_embeds
-
-    ##### AV #####
-    # Cosine Similarity: Check for stabilization of token embeddings across layers
-    prev_hidden_states = None  # To store the hidden states from the previous layer
+    prev_hidden_states = None  # To store the hidden states from the previous layer (for cosine similarity)
+    prev_token = (
+        None  # To store the predicted token from the previous layer (for token repeat)
+    )
+    token_repeats = 0  # Counter for repeated tokens
 
     for layer_idx, decoder_layer in enumerate(model.model.layers[:exit_layer]):
         hidden_states, past_key_values = decoder_layer(
@@ -307,21 +328,36 @@ def forward_early(
             padding_mask=None,
         )
 
-        # Checking cosine similarity and determining if to exit
-        result, exited_layer = compute_cosine_similarity(
-            hidden_states=hidden_states,
-            prev_hidden_states=prev_hidden_states,
-            similarity_threshold=similarity_threshold,
-            model=model,
-            past_key_values=past_key_values,
-            exit_query_cache=exit_query_cache,
-            layer_idx=layer_idx,
-        )
+        # Apply the chosen early exit criterion
+        if early_exit_criteria == "cosine_similarity":
+            result, exited_layer = cosine_similarity_early_exit(
+                hidden_states=hidden_states,
+                prev_hidden_states=prev_hidden_states,
+                similarity_threshold=similarity_threshold,
+                model=model,
+                past_key_values=past_key_values,
+                exit_query_cache=exit_query_cache,
+                layer_idx=layer_idx,
+            )
+            if result is not None:
+                return result, exited_layer
 
-        if result is not None:
-            return result, exited_layer
+            prev_hidden_states = hidden_states  # Update the previous hidden states
 
-        prev_hidden_states = hidden_states  # Update the previous hidden states
+        elif early_exit_criteria == "token_repeat":
+            result, exited_layer, prev_token, token_repeats = token_repeat_early_exit(
+                model=model,
+                hidden_states=hidden_states,
+                prev_token=prev_token,
+                token_repeats=token_repeats,
+                layer_idx=layer_idx,
+                repeats=repeats,
+            )
+            if result is not None:
+                return result, exited_layer
+
+        else:
+            raise ValueError(f"Unsupported early exit criteria: {early_exit_criteria}")
 
     past_key_values = past_key_values.to_legacy_cache()
 

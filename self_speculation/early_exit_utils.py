@@ -12,7 +12,65 @@ class ForwardResult:
     exit_query_cache: Optional[List[torch.Tensor]] = None
 
 
-def compute_cosine_similarity(
+def token_repeat_early_exit(
+    model,
+    hidden_states,
+    prev_token: Optional[torch.Tensor],
+    token_repeats: int,
+    layer_idx: int,
+    repeats: int,
+) -> Tuple[Optional[ForwardResult], int, torch.Tensor, int]:
+    """
+    Checks for token repetition across layers and triggers an early exit if the
+    predicted token is repeated for 3 consecutive layers.
+
+    Args:
+        model: The model instance.
+        hidden_states: The hidden states from the current layer.
+        prev_token: The predicted token from the previous layer.
+        token_repeats: The count of repeated tokens across consecutive layers.
+        layer_idx: The current layer index.
+        repeats: Number of times a token needs to be repeated for early exit
+
+    Returns:
+        - ForwardResult if early exit is triggered, otherwise None.
+        - Current layer index (layer_idx).
+        - Updated `prev_token` for the next layer.
+        - Updated `token_repeats` count.
+    """
+    # Get the predicted token from the current layer's hidden states (last token predicted).
+    logits = model.lm_head(hidden_states)
+    predicted_token = logits.argmax(dim=-1)[
+        :, -1
+    ]  # Take the token with max probability.
+
+    # Check if the predicted token is the same as the previous layer's prediction.
+    if prev_token is not None and (predicted_token == prev_token).all():
+        token_repeats += 1
+    else:
+        token_repeats = 0
+
+    # Exit early if the same token is predicted for 3 consecutive layers.
+    if token_repeats >= repeats:
+        # Early exit triggered due to repeated token.
+        return (
+            ForwardResult(
+                logits=logits,
+                past_key_values=model.past_key_values,
+                exit_query_cache=getattr(model, "exit_query_cache", None),
+            ),
+            layer_idx,
+            prev_token,
+            token_repeats,
+        )
+
+    # Update prev_token for the next layer.
+    prev_token = predicted_token
+
+    return None, layer_idx, prev_token, token_repeats
+
+
+def cosine_similarity_early_exit(
     hidden_states: torch.Tensor,
     prev_hidden_states: torch.Tensor,
     similarity_threshold: float,
