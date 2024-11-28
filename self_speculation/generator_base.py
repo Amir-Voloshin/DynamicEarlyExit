@@ -42,6 +42,7 @@ class GenerationConfig:
     top_p: float = 0.9
     no_repeat_ngram_size: int = None
     stop_words: List[str] = None
+    criteria: Optional[str] = None  # early exit criteria
 
 
 class GenerationStrategy:
@@ -51,9 +52,11 @@ class GenerationStrategy:
         input_ids: List[int],
         eos_token_id: int,
         generation_config: GenerationConfig,
-        logits_processors: Optional[transformers.generation.logits_process.LogitsProcessorList] = None,
+        logits_processors: Optional[
+            transformers.generation.logits_process.LogitsProcessorList
+        ] = None,
         stopping_criteria: Optional[transformers.StoppingCriteriaList] = None,
-        streamer: Optional[transformers.TextStreamer] = None,  
+        streamer: Optional[transformers.TextStreamer] = None,
     ) -> GenerationStrategyResult:
         raise NotImplementedError()
 
@@ -71,22 +74,34 @@ class HuggingfaceLlamaGenerator:
         self.generation_strategy = generation_strategy
 
     def create_logits_processors(
-            self,
-            generation_config: GenerationConfig,
+        self,
+        generation_config: GenerationConfig,
     ) -> transformers.generation.logits_process.LogitsProcessorList:
-        logits_processors: transformers.generation.logits_process.LogitsProcessorList = transformers.generation.logits_process.LogitsProcessorList()
+        logits_processors: (
+            transformers.generation.logits_process.LogitsProcessorList
+        ) = transformers.generation.logits_process.LogitsProcessorList()
         if generation_config.no_repeat_ngram_size:
-            logits_processors.append(transformers.generation.logits_process.NoRepeatNGramLogitsProcessor(generation_config.no_repeat_ngram_size))
+            logits_processors.append(
+                transformers.generation.logits_process.NoRepeatNGramLogitsProcessor(
+                    generation_config.no_repeat_ngram_size
+                )
+            )
 
         return logits_processors
 
     def create_stopping_criteria(
-            self,
-            generation_config: GenerationConfig,
+        self,
+        generation_config: GenerationConfig,
     ) -> transformers.StoppingCriteriaList:
-        stopping_criteria: transformers.StoppingCriteriaList = transformers.StoppingCriteriaList()
+        stopping_criteria: transformers.StoppingCriteriaList = (
+            transformers.StoppingCriteriaList()
+        )
         if generation_config.stop_words:
-            stopping_criteria.append(transformers.StopStringCriteria(self.tokenizer, generation_config.stop_words))
+            stopping_criteria.append(
+                transformers.StopStringCriteria(
+                    self.tokenizer, generation_config.stop_words
+                )
+            )
 
         return stopping_criteria
 
@@ -97,7 +112,9 @@ class HuggingfaceLlamaGenerator:
         streamer: Optional[transformers.TextStreamer] = None,
     ) -> GenerationResult:
         example = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=True)
-        logits_processors = self.create_logits_processors(generation_config=generation_config)
+        logits_processors = self.create_logits_processors(
+            generation_config=generation_config
+        )
         stopping_criteria = self.create_stopping_criteria(generation_config)
         with torch.inference_mode():
             start = time.time()
@@ -120,6 +137,8 @@ class HuggingfaceLlamaGenerator:
             decoded_prediction=decoded_prediction,
             num_tokens_generated=num_tokens_generated,
             total_time=total_time,
-            time_per_token=total_time / num_tokens_generated if num_tokens_generated > 0 else None,
+            time_per_token=(
+                total_time / num_tokens_generated if num_tokens_generated > 0 else None
+            ),
             tokens_per_second=num_tokens_generated / total_time,
         )

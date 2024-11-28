@@ -47,13 +47,14 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
 
         exit_query_cache = None
         for _ in range(generation_config.max_steps):
-            if generation_config.exit_layer > 0:
+            if generation_config.exit_layer > 0 or generation_config.criteria:
                 model_output, exit_layer = forward_early(
                     model,
                     input_ids,
                     past_key_values,
                     generation_config.exit_layer,
                     exit_query_cache,
+                    generation_config.critera,  # early exit criteria
                 )
 
                 # saving exit layer for token
@@ -91,17 +92,21 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
             # the KV cache (`past_key_values`) to speed up generation.
             input_ids = torch.tensor([[next_token]]).to(input_ids)
 
-        # if performing early exit, save results to a csv
-        if generation_config.exit_layer > 0:
+        # if performing dynamic early exit, save results to a csv
+        if generation_config.critera:
             # Specify the CSV filename
             csv_filename = "exited_layers.csv"
 
             # Write results to CSV
             with open(csv_filename, mode="w", newline="") as file:
                 writer = csv.writer(file)
-                writer.writerow(["Exit Layer"])  # Write header
-                for layer in exited_layers:
-                    writer.writerow([layer])  # Write each exit layer result
+                # Include token number in the header
+                writer.writerow(["Token Number", "Exit Layer", "Criteria"])
+                # Iterate over exited_layers with their corresponding indices
+                for token_number, layer in enumerate(
+                    exited_layers, start=1
+                ):  # Token numbers start from 1
+                    writer.writerow([token_number, layer, generation_config.critera])
 
         return GenerationStrategyResult(
             predicted_tokens=output_ids,

@@ -16,6 +16,7 @@ from self_speculation.generator_base import (
 
 raw_types = Union[str, float, int, Dict, List, Tuple]
 
+
 @dataclass
 class Arguments:
     model: str
