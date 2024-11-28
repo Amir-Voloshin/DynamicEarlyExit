@@ -40,6 +40,10 @@ def token_repeat_early_exit(
         - Updated `prev_token` for the next layer.
         - Updated `token_repeats` count.
     """
+
+    # Normalizing hidden states
+    hidden_states = model.model.norm(hidden_states)
+
     # Get the predicted token from the current layer's hidden states (last token predicted).
     logits = model.lm_head(hidden_states)
     predicted_token = logits.argmax(dim=-1)[
@@ -98,13 +102,12 @@ def cosine_similarity_early_exit(
         tuple: ForwardResult and layer index if exiting early, or (None, None).
     """
     if prev_hidden_states is not None:
-        # Normalize hidden states for cosine similarity calculation
-        norm_hidden_states = F.normalize(hidden_states, dim=-1)
-        norm_prev_hidden_states = F.normalize(prev_hidden_states, dim=-1)
+        # Normalizing hidden states
+        hidden_states = model.model.norm(hidden_states)
 
         # Compute cosine similarity for each token
         cosine_sim = torch.sum(
-            norm_hidden_states * norm_prev_hidden_states, dim=-1
+            hidden_states * prev_hidden_states, dim=-1
         )  # Shape: (batch_size, seq_length)
 
         # Exit early if similarity exceeds the threshold for all tokens in a batch
