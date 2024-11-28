@@ -16,6 +16,8 @@ def token_repeat_early_exit(
     model,
     hidden_states,
     prev_token: Optional[torch.Tensor],
+    past_key_values,
+    exit_query_cache,
     token_repeats: int,
     layer_idx: int,
     repeats: int,
@@ -56,8 +58,8 @@ def token_repeat_early_exit(
         return (
             ForwardResult(
                 logits=logits,
-                past_key_values=model.past_key_values,
-                exit_query_cache=getattr(model, "exit_query_cache", None),
+                past_key_values=past_key_values,
+                exit_query_cache=exit_query_cache,
             ),
             layer_idx,
             prev_token,

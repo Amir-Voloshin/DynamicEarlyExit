@@ -54,7 +54,7 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
                     past_key_values,
                     generation_config.exit_layer,
                     exit_query_cache,
-                    generation_config.critera,  # early exit criteria
+                    early_exit_criteria=generation_config.criteria,  
                 )
 
                 # saving exit layer for token
@@ -93,7 +93,7 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
             input_ids = torch.tensor([[next_token]]).to(input_ids)
 
         # if performing dynamic early exit, save results to a csv
-        if generation_config.critera:
+        if generation_config.criteria:
             # Specify the CSV filename
             csv_filename = "exited_layers.csv"
 
@@ -106,7 +106,7 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
                 for token_number, layer in enumerate(
                     exited_layers, start=1
                 ):  # Token numbers start from 1
-                    writer.writerow([token_number, layer, generation_config.critera])
+                    writer.writerow([token_number, layer, generation_config.criteria])
 
         return GenerationStrategyResult(
             predicted_tokens=output_ids,
