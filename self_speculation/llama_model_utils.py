@@ -7,7 +7,10 @@
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-from .early_exit_utils import cosine_similarity_early_exit, token_repeat_early_exit
+from .early_exit_utils import (
+    cosine_similarity_early_exit, 
+    token_repeat_early_exit,
+    convergence_early_exit)
 
 import torch
 import transformers
@@ -360,6 +363,19 @@ def forward_early(
             
             prev_hidden_states = hidden_states  # Update the previous hidden states
 
+        elif early_exit_criteria == "convergence":
+            result, exited_layer = convergence_early_exit(
+                hidden_states=hidden_states,
+                prev_hidden_states=prev_hidden_states,
+                model=model,
+                past_key_values=past_key_values,
+                exit_query_cache=exit_query_cache,
+                layer_idx=layer_idx,
+            )
+            if result is not None:
+                return result, exited_layer
+
+            prev_hidden_states = hidden_states  # Update the previous hidden states
         else:
             raise ValueError(f"Unsupported early exit criteria: {early_exit_criteria}")
 
