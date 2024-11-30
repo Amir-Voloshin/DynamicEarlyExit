@@ -256,7 +256,7 @@ def forward_early(
     exit_layer: int,
     exit_query_cache: Optional[List[torch.Tensor]] = None,
     similarity_threshold: float = 0.95,
-    repeats: int = 3,  # Threshold for repeated tokens
+    repeats: int = 4,  # Threshold for repeated tokens
     early_exit_criteria: str = "cosine_similarity",  # "cosine_similarity" or "token_repeat"
 ) -> ForwardResult:
     """
@@ -357,7 +357,7 @@ def forward_early(
             )
             if result is not None:
                 return result, exited_layer
-            
+
             prev_hidden_states = hidden_states  # Update the previous hidden states
 
         else:
