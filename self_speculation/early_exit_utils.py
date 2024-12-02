@@ -161,10 +161,12 @@ def convergence_early_exit(
     convergence_early_exit.layer_probs[layer_idx] = predicted_token_prob
 
     # Check convergence only after a few layers
-    if layer_idx > 2:
+    if layer_idx >= 2:
         prev_layer_prob = convergence_early_exit.layer_probs.get(layer_idx - 1, 0)
-        confidence_increment = predicted_token_prob - prev_layer_prob
+        # print(f"Layer {layer_idx}: Predicted prev token softmax probability: {prev_layer_prob:.4f}")
+        confidence_increment = abs(predicted_token_prob - prev_layer_prob)
         
+        # print(f"{confidence_increment=}")
         if abs(confidence_increment) <= delta_threshold:
             # print(f"Early exit at layer {layer_idx} with confidence increment {confidence_increment:.4f}")
             return (

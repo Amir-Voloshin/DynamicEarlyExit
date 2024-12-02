@@ -55,6 +55,7 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
                     generation_config.exit_layer,
                     exit_query_cache,
                     early_exit_criteria=generation_config.criteria,  
+                    delta_threshold=generation_config.delta_threshold,
                 )
 
                 # saving exit layer for token
