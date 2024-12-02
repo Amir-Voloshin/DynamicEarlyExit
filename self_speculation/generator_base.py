@@ -43,6 +43,7 @@ class GenerationConfig:
     no_repeat_ngram_size: int = None
     stop_words: List[str] = None
     criteria: Optional[str] = None  # early exit criteria
+    delta_threshold: Optional[float] = 0.01  # early exit convergence criteria
 
 
 class GenerationStrategy:

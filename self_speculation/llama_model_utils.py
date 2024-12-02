@@ -261,6 +261,7 @@ def forward_early(
     similarity_threshold: float = 0.95,
     repeats: int = 3,  # Threshold for repeated tokens
     early_exit_criteria: str = "cosine_similarity",  # "cosine_similarity" or "token_repeat"
+    delta_threshold: float = 0.01,
 ) -> ForwardResult:
     """
     Forward pass with early exit based on the chosen criterion.
@@ -371,6 +372,7 @@ def forward_early(
                 past_key_values=past_key_values,
                 exit_query_cache=exit_query_cache,
                 layer_idx=layer_idx,
+                delta_threshold=delta_threshold,
             )
             if result is not None:
                 return result, exited_layer

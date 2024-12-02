@@ -132,6 +132,7 @@ def convergence_early_exit(
     past_key_values,
     exit_query_cache,
     layer_idx: int,
+    delta_threshold: float = 0.01,
 ) -> tuple:
     """
     Creates a convergence early exit strategy. When the increments in the logits confidence
@@ -164,7 +165,7 @@ def convergence_early_exit(
         prev_layer_prob = convergence_early_exit.layer_probs.get(layer_idx - 1, 0)
         confidence_increment = predicted_token_prob - prev_layer_prob
         
-        if abs(confidence_increment) <= 0.01:
+        if abs(confidence_increment) <= delta_threshold:
             # print(f"Early exit at layer {layer_idx} with confidence increment {confidence_increment:.4f}")
             return (
                 ForwardResult(
