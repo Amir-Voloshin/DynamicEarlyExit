@@ -25,25 +25,26 @@ from self_speculation.llama_model_utils import (
 
 class AutoRegressiveGenerationStrategy(GenerationStrategy):
     def generate_token_ids(
-        self,
-        model: transformers.LlamaForCausalLM,
-        input_ids: List[int],
-        eos_token_id: int,
-        generation_config: GenerationConfig,
-        logits_processors: Optional[
-            transformers.generation.logits_process.LogitsProcessorList
-        ] = None,
-        stopping_criteria: Optional[transformers.StoppingCriteriaList] = None,
-        streamer: Optional[transformers.TextStreamer] = None,
-    ) -> GenerationStrategyResult:
+    self,
+    model: transformers.LlamaForCausalLM,
+    input_ids: List[int],
+    eos_token_id: int,
+    generation_config: GenerationConfig,
+    logits_processors: Optional[
+        transformers.generation.logits_process.LogitsProcessorList
+    ] = None,
+    stopping_criteria: Optional[transformers.StoppingCriteriaList] = None,
+    streamer: Optional[transformers.TextStreamer] = None,
+    csv_file_path: str = "tokens_by_layer.csv",  # CSV file path
+) -> GenerationStrategyResult:
         """Variant of `generate` with inputs/outputs formatted as token_ids."""
         past_key_values = None
 
         input_ids: torch.Tensor = torch.tensor([input_ids]).to(model.device)
         output_ids: List[int] = []
 
-        # recording which layers each token exited at
-        exited_layers = []
+        # Collect predictions across tokens
+        all_predictions = []
 
         exit_query_cache = None
         for token_number in range(generation_config.max_steps):
@@ -58,12 +59,12 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
                     repeats=generation_config.repeats,
                     similarity_threshold=generation_config.conf,
                 )
-
-                # saving exit layer for token
-                exited_layers.append(exit_layer)
-
             else:
-                model_output = forward(model, input_ids, past_key_values, token_number)
+                model_output, predictions = forward(
+                    model, input_ids, past_key_values
+                )  # Collect predictions for this token
+                all_predictions.append(predictions)  # Store predictions
+
             logits = model_output.logits
             if logits_processors:
                 logits = logits_processors(input_ids, logits)
@@ -82,31 +83,48 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
             if next_token == eos_token_id:
                 break
             if stopping_criteria:
-                # TODO: when implementing batch size > 1, stop each sample separately?
                 if torch.all(stopping_criteria(input_ids, scores=None)):
                     break
             output_ids.append(next_token)
-            # Don't concatenate `next_token` to original `input_ids` since we're using
-            # the KV cache (`past_key_values`) to speed up generation.
             input_ids = torch.tensor([[next_token]]).to(input_ids)
 
-        # if performing dynamic early exit, save results to a csv
-        if generation_config.criteria:
-            # Specify the CSV filename
-            csv_filename = "exited_layers.csv"
+        # Write all predictions to CSV after generation completes
+        #if torch.distributed.get_rank() == 0:  # Ensure only rank 0 writes
+        with open(csv_file_path, mode="w", newline="") as csvfile:
+            csv_writer = csv.writer(csvfile)
 
-            # Write results to CSV
-            with open(csv_filename, mode="w", newline="") as file:
-                writer = csv.writer(file)
-                # Include token number in the header
-                writer.writerow(["Token Number", "Exit Layer", "Criteria"])
-                # Iterate over exited_layers with their corresponding indices
-                for token_number, layer in enumerate(
-                    exited_layers, start=1
-                ):  # Token numbers start from 1
-                    writer.writerow([token_number, layer, generation_config.criteria])
+            # Prepare header
+            max_tokens = max(len(predictions) for predictions in all_predictions)
+            header = ["Layer"] + [f"Token {i+1}" for i in range(max_tokens)]
+            csv_writer.writerow(header)
 
-        return GenerationStrategyResult(
-            predicted_tokens=output_ids,
-            acceptance_rate=None,
-        )
+            # Write layer rows
+            for layer_idx in range(len(model.model.layers)):
+                row = [f"Layer {layer_idx + 1}"]
+                for predictions in all_predictions:
+                    if layer_idx < len(predictions):
+                        row.append(predictions[layer_idx][1])  # Use token from predictions
+                    else:
+                        row.append("")
+                csv_writer.writerow(row)
+
+            # if performing dynamic early exit, save results to a csv
+            if generation_config.criteria:
+                # Specify the CSV filename
+                csv_filename = "exited_layers.csv"
+
+                # Write results to CSV
+                with open(csv_filename, mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    # Include token number in the header
+                    writer.writerow(["Token Number", "Exit Layer", "Criteria"])
+                    # Iterate over exited_layers with their corresponding indices
+                    for token_number, layer in enumerate(
+                        exited_layers, start=1
+                    ):  # Token numbers start from 1
+                        writer.writerow([token_number, layer, generation_config.criteria])
+
+            return GenerationStrategyResult(
+                predicted_tokens=output_ids,
+                acceptance_rate=None,
+            )

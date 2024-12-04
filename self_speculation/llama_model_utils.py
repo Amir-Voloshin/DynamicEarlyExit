@@ -198,8 +198,7 @@ def forward(
     model: transformers.LlamaForCausalLM,
     input_ids: torch.Tensor,
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]],
-    csv_file_path: str = "tokens_by_layer",
-) -> ForwardResult:
+) -> Tuple[ForwardResult, List[Tuple[str, str]]]:  # Include predictions in return
     device = input_ids.device
     batch_size, seq_length = input_ids.shape
 
@@ -254,24 +253,12 @@ def forward(
         ].item()  # Take the token with max probability.
         predictions.append((f"Layer {layer_idx}", f"Token {predicted_token}"))
 
-    # Write predictions to CSV
-    with open(csv_file_path, mode="w", newline="") as csvfile:
-        csv_writer = csv.writer(csvfile)
-
-        # Prepare header
-        header = [""] + [f"Token {i+1}" for i in range(len(predictions))]
-        csv_writer.writerow(header)
-
-        # Write layer rows
-        for layer_idx, (layer_label, token_label) in enumerate(predictions, start=1):
-            row = [f"Layer {layer_idx}"] + [token_label]
-            csv_writer.writerow(row)
-
     past_key_values = past_key_values.to_legacy_cache()
     hidden_states = model.model.norm(hidden_states)
     logits = model.lm_head(hidden_states)
 
-    return ForwardResult(logits=logits, past_key_values=past_key_values)
+    # Return predictions along with ForwardResult
+    return ForwardResult(logits=logits, past_key_values=past_key_values), predictions
 
 
 # TODO: update forward_early(...) to use transformers' new KV cache implementation rather than legacy.
