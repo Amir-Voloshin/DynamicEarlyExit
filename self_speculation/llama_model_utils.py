@@ -7,10 +7,16 @@
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-from .early_exit_utils import cosine_similarity_early_exit, token_repeat_early_exit, entropy_based_early_exit, entropy_gradient_early_exit
+from .early_exit_utils import (
+    cosine_similarity_early_exit,
+    token_repeat_early_exit,
+    entropy_based_early_exit,
+    entropy_gradient_early_exit,
+)
 
 import torch
 import transformers
+import csv
 
 
 @dataclass
@@ -192,6 +198,7 @@ def forward(
     model: transformers.LlamaForCausalLM,
     input_ids: torch.Tensor,
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]],
+    csv_file_path: str = "tokens_by_layer",
 ) -> ForwardResult:
     device = input_ids.device
     batch_size, seq_length = input_ids.shape
@@ -227,7 +234,9 @@ def forward(
     )
 
     hidden_states = inputs_embeds
-    for decoder_layer in model.model.layers:
+    predictions = []  # To store layer predictions
+
+    for layer_idx, decoder_layer in enumerate(model.model.layers, start=1):
         hidden_states, past_key_values = decoder_layer(
             hidden_states,
             attention_mask=attention_mask,
@@ -237,6 +246,26 @@ def forward(
             use_cache=True,
             padding_mask=None,
         )
+
+        # Compute logits and predicted token for this layer
+        logits = model.lm_head(hidden_states)
+        predicted_token = logits.argmax(dim=-1)[
+            :, -1
+        ].item()  # Take the token with max probability.
+        predictions.append((f"Layer {layer_idx}", f"Token {predicted_token}"))
+
+    # Write predictions to CSV
+    with open(csv_file_path, mode="w", newline="") as csvfile:
+        csv_writer = csv.writer(csvfile)
+
+        # Prepare header
+        header = [""] + [f"Token {i+1}" for i in range(len(predictions))]
+        csv_writer.writerow(header)
+
+        # Write layer rows
+        for layer_idx, (layer_label, token_label) in enumerate(predictions, start=1):
+            row = [f"Layer {layer_idx}"] + [token_label]
+            csv_writer.writerow(row)
 
     past_key_values = past_key_values.to_legacy_cache()
     hidden_states = model.model.norm(hidden_states)
@@ -389,12 +418,18 @@ def forward_early(
             softmax_probs = torch.softmax(last_token_logits, dim=-1)
 
             # Compute entropy
-            entropy = -torch.sum(softmax_probs * torch.log(softmax_probs), dim=-1).mean()
-            entropy_values.append(entropy.item())  # Store entropy for gradient calculations
+            entropy = -torch.sum(
+                softmax_probs * torch.log(softmax_probs), dim=-1
+            ).mean()
+            entropy_values.append(
+                entropy.item()
+            )  # Store entropy for gradient calculations
 
             # Log for debugging
             print(f"Layer {layer_idx}: Entropy = {entropy.item():.4f}")
-            print(f"Softmax probabilities (min: {softmax_probs.min().item()}, max: {softmax_probs.max().item()})")
+            print(
+                f"Softmax probabilities (min: {softmax_probs.min().item()}, max: {softmax_probs.max().item()})"
+            )
 
             # Check for early exit using entropy gradient
             if entropy_gradient_early_exit(entropy_values, layer_idx):

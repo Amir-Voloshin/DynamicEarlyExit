@@ -46,7 +46,7 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
         exited_layers = []
 
         exit_query_cache = None
-        for _ in range(generation_config.max_steps):
+        for token_number in range(generation_config.max_steps):
             if generation_config.exit_layer > 0 or generation_config.criteria:
                 model_output, exit_layer = forward_early(
                     model,
@@ -63,11 +63,7 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
                 exited_layers.append(exit_layer)
 
             else:
-                model_output = forward(
-                    model,
-                    input_ids,
-                    past_key_values,
-                )
+                model_output = forward(model, input_ids, past_key_values, token_number)
             logits = model_output.logits
             if logits_processors:
                 logits = logits_processors(input_ids, logits)
