@@ -7,7 +7,7 @@
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-from .early_exit_utils import cosine_similarity_early_exit, token_repeat_early_exit
+from .early_exit_utils import cosine_similarity_early_exit, token_repeat_early_exit, entropy_based_early_exit, entropy_gradient_early_exit
 
 import torch
 import transformers
@@ -257,7 +257,9 @@ def forward_early(
     exit_query_cache: Optional[List[torch.Tensor]] = None,
     similarity_threshold: float = 0.95,
     repeats: int = 4,  # Threshold for repeated tokens
-    early_exit_criteria: str = "cosine_similarity",  # "cosine_similarity" or "token_repeat"
+    early_exit_criteria: str = "entropy_based",  # "cosine_similarity" or "token_repeat"
+    initial_threshold: float = 2.0,  # For entropy-based exit
+    final_threshold: float = 0.5,  # For entropy-based exit
 ) -> ForwardResult:
     """
     Forward pass with early exit based on the chosen criterion.
@@ -316,6 +318,8 @@ def forward_early(
         None  # To store the predicted token from the previous layer (for token repeat)
     )
     token_repeats = 0  # Counter for repeated tokens
+    max_layers = len(model.model.layers)  # Total number of layers
+    entropy_values = []  # Store entropy values per layer
 
     for layer_idx, decoder_layer in enumerate(model.model.layers[:exit_layer]):
         hidden_states, past_key_values = decoder_layer(
@@ -357,6 +361,52 @@ def forward_early(
             )
             if result is not None:
                 return result, exited_layer
+
+            prev_hidden_states = hidden_states  # Update the previous hidden states
+
+        elif early_exit_criteria == "entropy_based":
+            result, exited_layer = entropy_based_early_exit(
+                hidden_states=hidden_states,
+                prev_hidden_states=prev_hidden_states,
+                model=model,
+                past_key_values=past_key_values,
+                exit_query_cache=exit_query_cache,
+                layer_idx=layer_idx,
+                max_layers=max_layers,
+                initial_threshold=initial_threshold,
+                final_threshold=final_threshold,
+            )
+            if result is not None:
+                return result, exited_layer
+
+            prev_hidden_states = hidden_states  # Update the previous hidden states
+
+        elif early_exit_criteria == "entropy_gradient":
+            result = None
+            logits = model.lm_head(hidden_states)
+            logits = torch.where(logits == 0, torch.randn_like(logits) * 1e-5, logits)
+            last_token_logits = logits[:, -1, :]
+            softmax_probs = torch.softmax(last_token_logits, dim=-1)
+
+            # Compute entropy
+            entropy = -torch.sum(softmax_probs * torch.log(softmax_probs), dim=-1).mean()
+            entropy_values.append(entropy.item())  # Store entropy for gradient calculations
+
+            # Log for debugging
+            print(f"Layer {layer_idx}: Entropy = {entropy.item():.4f}")
+            print(f"Softmax probabilities (min: {softmax_probs.min().item()}, max: {softmax_probs.max().item()})")
+
+            # Check for early exit using entropy gradient
+            if entropy_gradient_early_exit(entropy_values, layer_idx):
+                print(f"Early exit at Layer {layer_idx}")
+                result = ForwardResult(
+                    logits=logits,
+                    past_key_values=past_key_values,
+                    exit_query_cache=exit_query_cache,
+                )
+
+            if result is not None:
+                return result, layer_idx
 
             prev_hidden_states = hidden_states  # Update the previous hidden states
 
