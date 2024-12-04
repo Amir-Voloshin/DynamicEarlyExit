@@ -44,6 +44,8 @@ class GenerationConfig:
     stop_words: List[str] = None
     criteria: Optional[str] = None  # early exit criteria
     delta_threshold: Optional[float] = 0.01  # early exit convergence criteria
+    repeats: int = 4  # number of tokens for repeated tokens
+    conf: float = 0.95  # confidence for cosine similarity
 
 
 class GenerationStrategy:
