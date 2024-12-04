@@ -25,23 +25,26 @@ from self_speculation.llama_model_utils import (
 
 class AutoRegressiveGenerationStrategy(GenerationStrategy):
     def generate_token_ids(
-    self,
-    model: transformers.LlamaForCausalLM,
-    input_ids: List[int],
-    eos_token_id: int,
-    generation_config: GenerationConfig,
-    logits_processors: Optional[
-        transformers.generation.logits_process.LogitsProcessorList
-    ] = None,
-    stopping_criteria: Optional[transformers.StoppingCriteriaList] = None,
-    streamer: Optional[transformers.TextStreamer] = None,
-    csv_file_path: str = "tokens_by_layer.csv",  # CSV file path
-) -> GenerationStrategyResult:
+        self,
+        model: transformers.LlamaForCausalLM,
+        input_ids: List[int],
+        eos_token_id: int,
+        generation_config: GenerationConfig,
+        logits_processors: Optional[
+            transformers.generation.logits_process.LogitsProcessorList
+        ] = None,
+        stopping_criteria: Optional[transformers.StoppingCriteriaList] = None,
+        streamer: Optional[transformers.TextStreamer] = None,
+        csv_file_path: str = "tokens_by_layer.csv",  # CSV file path
+    ) -> GenerationStrategyResult:
         """Variant of `generate` with inputs/outputs formatted as token_ids."""
         past_key_values = None
 
         input_ids: torch.Tensor = torch.tensor([input_ids]).to(model.device)
         output_ids: List[int] = []
+
+        # recording which layers each token exited at
+        exited_layers = []
 
         # Collect predictions across tokens
         all_predictions = []
@@ -59,6 +62,10 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
                     repeats=generation_config.repeats,
                     similarity_threshold=generation_config.conf,
                 )
+
+                # saving exit layer for token
+                exited_layers.append(exit_layer)
+
             else:
                 model_output, predictions = forward(
                     model, input_ids, past_key_values
@@ -89,7 +96,7 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
             input_ids = torch.tensor([[next_token]]).to(input_ids)
 
         # Write all predictions to CSV after generation completes
-        #if torch.distributed.get_rank() == 0:  # Ensure only rank 0 writes
+        # if torch.distributed.get_rank() == 0:  # Ensure only rank 0 writes
         with open(csv_file_path, mode="w", newline="") as csvfile:
             csv_writer = csv.writer(csvfile)
 
@@ -103,7 +110,9 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
                 row = [f"Layer {layer_idx + 1}"]
                 for predictions in all_predictions:
                     if layer_idx < len(predictions):
-                        row.append(predictions[layer_idx][1])  # Use token from predictions
+                        row.append(
+                            predictions[layer_idx][1]
+                        )  # Use token from predictions
                     else:
                         row.append("")
                 csv_writer.writerow(row)
@@ -122,7 +131,9 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
                     for token_number, layer in enumerate(
                         exited_layers, start=1
                     ):  # Token numbers start from 1
-                        writer.writerow([token_number, layer, generation_config.criteria])
+                        writer.writerow(
+                            [token_number, layer, generation_config.criteria]
+                        )
 
             return GenerationStrategyResult(
                 predicted_tokens=output_ids,

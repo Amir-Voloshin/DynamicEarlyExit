@@ -16,7 +16,7 @@ from .early_exit_utils import (
 
 import torch
 import transformers
-import csv
+from arguments import Arguments
 
 
 @dataclass
@@ -197,6 +197,7 @@ def crop_past_key_values(
 def forward(
     model: transformers.LlamaForCausalLM,
     input_ids: torch.Tensor,
+    args: Arguments,  # model path needed for tokenizer
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]],
 ) -> Tuple[ForwardResult, List[Tuple[str, str]]]:  # Include predictions in return
     device = input_ids.device
@@ -204,6 +205,9 @@ def forward(
 
     seq_length_with_past = seq_length
     past_key_values_length = 0
+
+    # for decoding each layers token
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model)
 
     if past_key_values is not None:
         past_key_values_length = past_key_values[0][0].shape[2]
@@ -248,10 +252,14 @@ def forward(
 
         # Compute logits and predicted token for this layer
         logits = model.lm_head(hidden_states)
-        predicted_token = logits.argmax(dim=-1)[
+        predicted_token_id = logits.argmax(dim=-1)[
             :, -1
         ].item()  # Take the token with max probability.
-        predictions.append((f"Layer {layer_idx}", f"Token {predicted_token}"))
+        # predictions.append((f"Layer {layer_idx}", f"Token {predicted_token}"))
+
+        # Convert token ID to actual token using the tokenizer
+        predicted_token = tokenizer.decode([predicted_token_id])
+        predictions.append((f"Layer {layer_idx}", f"Token {predicted_token.strip()}"))
 
     past_key_values = past_key_values.to_legacy_cache()
     hidden_states = model.model.norm(hidden_states)
