@@ -30,13 +30,14 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
         input_ids: List[int],
         eos_token_id: int,
         generation_config: GenerationConfig,
+        csv_file_path: str = "tokens_by_layer.csv",  # CSV file path
         logits_processors: Optional[
             transformers.generation.logits_process.LogitsProcessorList
         ] = None,
         stopping_criteria: Optional[transformers.StoppingCriteriaList] = None,
         streamer: Optional[transformers.TextStreamer] = None,
-        csv_file_path: str = "tokens_by_layer.csv",  # CSV file path
     ) -> GenerationStrategyResult:
+
         """Variant of `generate` with inputs/outputs formatted as token_ids."""
         past_key_values = None
 
@@ -68,7 +69,7 @@ class AutoRegressiveGenerationStrategy(GenerationStrategy):
 
             else:
                 model_output, predictions = forward(
-                    model, input_ids, past_key_values
+                    model=model, input_ids=input_ids, past_key_values=past_key_values
                 )  # Collect predictions for this token
                 all_predictions.append(predictions)  # Store predictions
 

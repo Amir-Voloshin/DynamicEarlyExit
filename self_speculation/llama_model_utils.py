@@ -16,7 +16,6 @@ from .early_exit_utils import (
 
 import torch
 import transformers
-from arguments import Arguments
 
 
 @dataclass
@@ -197,7 +196,6 @@ def crop_past_key_values(
 def forward(
     model: transformers.LlamaForCausalLM,
     input_ids: torch.Tensor,
-    args: Arguments,  # model path needed for tokenizer
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]],
 ) -> Tuple[ForwardResult, List[Tuple[str, str]]]:  # Include predictions in return
     device = input_ids.device
@@ -207,7 +205,8 @@ def forward(
     past_key_values_length = 0
 
     # for decoding each layers token
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model)
+    #TODO: fix hardcoding
+    tokenizer = transformers.AutoTokenizer.from_pretrained("facebook/layerskip-llama3.2-1B")
 
     if past_key_values is not None:
         past_key_values_length = past_key_values[0][0].shape[2]
@@ -259,7 +258,7 @@ def forward(
 
         # Convert token ID to actual token using the tokenizer
         predicted_token = tokenizer.decode([predicted_token_id])
-        predictions.append((f"Layer {layer_idx}", f"Token {predicted_token.strip()}"))
+        predictions.append((f"Layer {layer_idx}", f"{predicted_token.strip()}"))
 
     past_key_values = past_key_values.to_legacy_cache()
     hidden_states = model.model.norm(hidden_states)
