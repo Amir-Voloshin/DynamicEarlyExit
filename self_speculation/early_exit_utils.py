@@ -179,17 +179,93 @@ def convergence_early_exit(
             )
     return None, None
 
+def max_prob_early_exit(
+    hidden_states: torch.Tensor,
+    model,
+    past_key_values,
+    exit_query_cache,
+    layer_idx: int,
+    max_layers: int,
+    initial_threshold: float = 0.99,
+    final_threshold: float = 0.75,
+    scale: float = 1.0,
+) -> tuple:
+    """
+    Early exit based on dynamic max probability threshold.
+
+    Args:
+        hidden_states (torch.Tensor): Model's hidden states.
+        model: Model instance.
+        past_key_values: Cache of past key values.
+        exit_query_cache: Query cache for exits.
+        layer_idx (int): Current layer index.
+        max_layers (int): Total number of layers.
+        initial_threshold (float): Starting threshold for max probability.
+        final_threshold (float): Final threshold for max probability.
+        scale (float): Controls the curve of the dynamic threshold.
+
+    Returns:
+        tuple: ForwardResult and layer index if exiting early, else (None, None).
+    """
+    def dynamic_max_prob_threshold(layer_idx, max_layers, initial, final, scale):
+        layer_ratio = (max_layers - layer_idx) / max_layers
+        return initial * (layer_ratio ** scale) + final * (1 - layer_ratio ** scale)
+
+    max_prob_threshold = dynamic_max_prob_threshold(
+        layer_idx, max_layers, initial_threshold, final_threshold, scale
+    )
+
+    # Normalize hidden states and compute logits
+    hidden_states = model.model.norm(hidden_states)
+    logits = model.lm_head(hidden_states)
+
+    # Replace zero logits to avoid log(0) issues
+    logits = torch.where(logits == 0, torch.randn_like(logits) * 1e-5, logits)
+    last_token_logits = logits[:, -1, :]
+    softmax_probs = torch.softmax(last_token_logits, dim=-1)
+
+    # Clamp probabilities to ensure no zero values
+    softmax_probs = torch.clamp(softmax_probs, min=1e-12, max=1.0 - 1e-12)
+
+    # Compute log probabilities
+    log_probs = torch.log(softmax_probs)
+
+    # Debugging logs
+    # print(f"Layer {layer_idx}: Max Prob Threshold = {max_prob_threshold:.4f}")
+    # print(f"Softmax probabilities (min: {softmax_probs.min().item()}, max: {softmax_probs.max().item()})")
+    # print(f"Softmax sum: {softmax_probs.sum(dim=-1).mean().item()}")
+
+    # Find the token with the maximum probability
+    max_prob, max_prob_token = torch.max(softmax_probs, dim=-1)
+
+    # Check for maximum probability threshold
+    if max_prob_threshold is not None:
+        if max_prob.item() > max_prob_threshold:
+            # print(f"Early exit at Layer {layer_idx} with max probability = {max_prob.item():.4f}")
+            # print(f"Token triggering early exit: {max_prob_token.item()} with probability = {max_prob.item():.4f}")
+            return (
+                ForwardResult(
+                    logits=logits,
+                    past_key_values=past_key_values,
+                    exit_query_cache=exit_query_cache,
+                ),
+                layer_idx,
+                max_prob_token.item()  # Return the token index
+            )
+
+    return None, None, None
+
+
 def entropy_based_early_exit(
         hidden_states: torch.Tensor,
-        prev_hidden_states: torch.Tensor,
         model,
         past_key_values,
         exit_query_cache,
         layer_idx: int,
         max_layers: int,
-        initial_threshold: float = 2.0,
-        final_threshold: float = 0.5,
-        max_prob_threshold: Optional[float] = 0.7,  # Add a maximum probability threshold
+        initial_threshold: float = 11.0,
+        final_threshold: float = 10.5,
+        temperature: float = 3.0
 ) -> tuple:
     """
     Uses entropy to determine early exit, with a decreasing threshold as the network progresses.
@@ -203,6 +279,7 @@ def entropy_based_early_exit(
         max_layers (int): Total number of layers in the model.
         initial_threshold (float): Entropy threshold at the first layer.
         final_threshold (float): Entropy threshold at the last layer.
+        temperature (float): Entropy temperature.
 
     Returns:
         tuple: ForwardResult and layer index if exiting early, or (None, None).
@@ -212,52 +289,27 @@ def entropy_based_early_exit(
         scale = (max_layers - layer_idx) / max_layers
         return initial * (scale ** steepness) + final * (1 - scale ** steepness)
 
-    # Compute the dynamic threshold based on the layer index
-    # Compute dynamic entropy threshold
-    # threshold = (
-    #         initial_threshold
-    #         - (initial_threshold - final_threshold) * (layer_idx / max_layers)
-    # )
-
     threshold = dynamic_threshold(layer_idx, max_layers, initial_threshold, final_threshold)
 
-    # Calculate logits and softmax probabilities
-    # if prev_hidden_states is not None:
+    # Normalize hidden states and compute logits
     hidden_states = model.model.norm(hidden_states)
-
     logits = model.lm_head(hidden_states)
-    logits = torch.where(logits == 0, torch.randn_like(logits) * 1e-5, logits)
-    last_token_logits = logits[:, -1, :]
-    softmax_probs = torch.softmax(last_token_logits, dim=-1)
 
-    # Clamp probabilities to avoid log(0) and nan
-    softmax_probs = torch.clamp(softmax_probs, min=1e-9, max=1 - 1e-9)
+    # Stabilized entropy calculation
+    stabilized_logits = (logits - logits.max(dim=-1, keepdim=True).values) / temperature
+    softmax_probs = torch.softmax(stabilized_logits, dim=-1).float()  # Cast back to float32
+    softmax_probs = torch.clamp(softmax_probs, min=1e-12)  # Ensure no probabilities are too small
+    log_probs = torch.log(softmax_probs)
+    entropy = -torch.sum(softmax_probs * log_probs, dim=-1).mean()
 
-    # Compute entropy
-    entropy = -torch.sum(softmax_probs * torch.log(softmax_probs), dim=-1).mean()
-
-    # Log for debugging
-    print(f"Layer {layer_idx}: Entropy = {entropy.item():.4f}, Threshold = {threshold:.4f}")
-
-    print(f"Softmax probabilities (min: {softmax_probs.min().item()}, max: {softmax_probs.max().item()})")
-
-    # Check for maximum probability threshold
-    max_prob = softmax_probs.max().item()
-    if max_prob_threshold is not None:
-        if max_prob > max_prob_threshold:
-            print(f"Early exit at Layer {layer_idx} with max probability = {max_prob:.4f}")
-            return (
-                ForwardResult(
-                    logits=logits,
-                    past_key_values=past_key_values,
-                    exit_query_cache=exit_query_cache,
-                ),
-                layer_idx,
-            )
+    # Debugging logs
+    # print(f"Layer {layer_idx}: Entropy = {entropy.item():.4f}, Threshold = {threshold:.4f}")
+    # print(f"Softmax probabilities (min: {softmax_probs.min().item()}, max: {softmax_probs.max().item()})")
+    # print(f"Softmax sum: {softmax_probs.sum(dim=-1).mean().item()}")
 
     # Check for entropy threshold
     if entropy < threshold:
-        print(f"Early exit at Layer {layer_idx} with entropy = {entropy:.4f}")
+        # print(f"Early exit at Layer {layer_idx} with entropy = {entropy:.4f}")
         return (
             ForwardResult(
                 logits=logits,
@@ -268,45 +320,3 @@ def entropy_based_early_exit(
         )
 
     return None, None
-
-
-def entropy_gradient_early_exit(
-        entropy_values: List[float],
-        layer_idx: int,
-        gradient_threshold: float = 0.02,
-        window: int = 3,  # Window size for moving average
-) -> bool:
-    """
-    Determines early exit based on entropy gradient stability.
-
-    Args:
-        entropy_values (List[float]): List of entropy values up to the current layer.
-        layer_idx (int): Current layer index.
-        gradient_threshold (float): Gradient threshold for triggering early exit.
-        window (int): Number of layers to consider for stability.
-
-    Returns:
-        bool: True if the entropy gradient is stable, False otherwise.
-    """
-    # Skip gradient calculation for the first layer
-    if layer_idx == 0:
-        return False
-
-    # Calculate entropy gradient
-    entropy_gradient = abs(entropy_values[layer_idx] - entropy_values[layer_idx - 1])
-
-    # Compute moving average of recent gradients (optional, for stability)
-    if len(entropy_values) > window:
-        recent_gradients = [
-            abs(entropy_values[i] - entropy_values[i - 1])
-            for i in range(layer_idx - window + 1, layer_idx + 1)
-        ]
-        avg_gradient = sum(recent_gradients) / len(recent_gradients)
-    else:
-        avg_gradient = entropy_gradient
-
-    # Log for debugging
-    print(f"Entropy Gradient = {entropy_gradient:.6f}, Moving Average = {avg_gradient:.6f} at Layer {layer_idx}")
-
-    # Trigger early exit if gradient falls below the threshold
-    return avg_gradient != 0.0 and avg_gradient < gradient_threshold
