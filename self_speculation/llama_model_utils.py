@@ -252,6 +252,7 @@ def forward(
         )
 
         # Compute logits and predicted token for this layer
+        hidden_states = model.model.norm(hidden_states)
         logits = model.lm_head(hidden_states)
 
         # Convert token ID to actual token using the tokenizer
