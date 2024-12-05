@@ -8,8 +8,6 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 from .early_exit_utils import (cosine_similarity_early_exit, token_repeat_early_exit, entropy_based_early_exit, max_prob_early_exit)
-import os
-import csv
 
 import torch
 import transformers
@@ -251,26 +249,6 @@ def forward(
 import torch.nn.functional as F
 
 
-def log_entropy_to_file(entropy_values, run_id, file_name="entropy_log.csv"):
-    """Logs entropy values for each run to a file."""
-    write_header = not os.path.exists(file_name)  # Write header if file doesn't exist
-    with open(file_name, mode="a", newline="") as file:
-        writer = csv.writer(file)
-        if write_header:
-            writer.writerow(["Run", "Layer", "Entropy"])
-        for layer_idx, entropy in enumerate(entropy_values):
-            writer.writerow([run_id, layer_idx, entropy])
-
-
-def get_next_run_index(file_name="entropy_log.csv"):
-    if not os.path.exists(file_name):
-        return 1
-    with open(file_name, mode="r") as file:
-        reader = csv.DictReader(file)
-        runs = [int(row["Run"]) for row in reader]
-        return max(runs) + 1 if runs else 1
-
-
 def forward_early(
     model: transformers.LlamaForCausalLM,
     input_ids: torch.Tensor,
@@ -279,7 +257,7 @@ def forward_early(
     exit_query_cache: Optional[List[torch.Tensor]] = None,
     similarity_threshold: float = 0.95,
     repeats: int = 4,  # Threshold for repeated tokens
-    early_exit_criteria: str = "entropy_based",  # "cosine_similarity" or "token_repeat"
+    early_exit_criteria: str = "cosine_similarity",  # "cosine_similarity" or "token_repeat"
     entropy_initial_threshold: float = 11.0,  # For entropy-based exit
     entropy_final_threshold: float = 10.5,  # For entropy-based exit
     entropy_temp: float = 3.0, # For entropy-based exit
@@ -302,6 +280,15 @@ def forward_early(
         early_exit_criteria: The criterion for early exit. Options are:
                              - "cosine_similarity"
                              - "token_repeat"
+                             - "entropy_based"
+                             - "max_probability"
+        entropy_initial_threshold: Initial threshold for entropy-based early exit.
+        entropy_final_threshold: Final threshold for entropy-based early exit.
+        entropy_temp: Temperature parameter to scale entropy calculations for entropy-based early exit.
+        max_prob_initial_threshold: Initial threshold for max-probability-based early exit.
+        max_prob_final_threshold: Final threshold for max-probability-based early exit.
+        max_prob_scale: Scale parameter to control the shape of the threshold function
+            for max-probability-based early exit
 
     Returns:
         ForwardResult and the index of the layer where early exit occurred.
