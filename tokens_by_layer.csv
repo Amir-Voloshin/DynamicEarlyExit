@@ -1,17 +1,21 @@
 Layer,Token 1,Token 2,Token 3,Token 4,Token 5,Token 6,Token 7,Token 8,Token 9,Token 10,Token 11,Token 12,Token 13,Token 14,Token 15,Token 16
-Layer 1,201,:,and,",",the,,latest,",",and,is,the,on,the,,","
-Layer 2,201,th,grade,",",the,,and,.,and,is,the,on,the,,’s
-Layer 3,201,th,place,in,the,,,of,and,is,,on,,,’s
-Layer 4,1,th,place,",",the,,round,of,and,are,,on,the,,’s
-Layer 5,3,th,place,in,the,,poll,of,but,is,based,on,rankings,rankings,’s
-Layer 6,3,th,place,in,the,,poll,",",but,are,released,on,the,rankings,’s
-Layer 7,3,th,place,in,the,,,",",but,is,updated,on,the,rankings,’s
-Layer 8,3,th,place,in,the,,,",",but,are,based,on,the,,’s
-Layer 9,3,th,place,in,the,,,",",ranking,are,based,on,last,latest,’s
-Layer 10,4,th,place,in,the,,,",",with,are,based,on,the,,’s
-Layer 11,4,th,place,in,the,,,",",but,are,based,on,a,,’s
-Layer 12,4,th,place,",",the,,College,",",which,are,out,on,the,,’s
-Layer 13,,th,place,in,the,,"""",",",which,are,based,on,the,latest,’s
-Layer 14,2,th,place,",",the,,"""",",",and,are,out,on,the,latest,’s
-Layer 15,2,th,place,in,the,,"""",",",and,are,based,on,the,,’s
-Layer 16,2,th,place,in,the,latest,US,",",which,are,based,on,the,results,’s
+Layer 1,201,:, and,",", the, , latest,",", and, is, the, on, the, ,",", “, record, the, strength, the
+Layer 2,201,th, grade,",", the, , and,., and, is, the, on, the, ,’s, history, record, the, strength, the
+Layer 3,201,th, place, in, the, , , of, and, is, , on, , ,’s, , of, the, of, the
+Layer 4,1,th, place,",", the, , round, of, and, are, , on, the, ,’s, progress,".
+", the,., the
+Layer 5,3,th, place, in, the, , poll, of, but, is, based, on, rankings, rankings,’s, ranking,., the, of, play
+Layer 6,3,th, place, in, the, , poll,",", but, are, released, on, the, rankings,’s, ,., the, of, schedule
+Layer 7,3,th, place, in, the, , ,",", but, is, updated, on, the, rankings,’s, performance,., the, of, schedule
+Layer 8,3,th, place, in, the, , ,",", but, are, based, on, the, ,’s, performance,",", the, of, play
+Layer 9,3,th, place, in, the, , ,",", ranking, are, based, on, last, latest,’s, last, in, the, of, play
+Layer 10,4,th, place, in, the, , ,",", with, are, based, on, the, ,’s, performance,",", the, of, schedule
+Layer 11,4,th, place, in, the, , ,",", but, are, based, on, a, ,’s, performance,",", the, of, schedule
+Layer 12,4,th, place,",", the, , College,",", which, are, out, on, the, ,’s, ,",", its,-of, schedule
+Layer 13,"
+    
+
+",th, place, in, the, ," """,",", which, are, based, on, the, latest,’s, performance,",", its, of, schedule
+Layer 14,2,th, place,",", the, ," """,",", and, are, out, on, the, latest,’s, performance,",", its, of, schedule
+Layer 15,2,th, place, in, the, ," """,",", and, are, based, on, the, ,’s, performance,",", strength, of, schedule
+Layer 16,2,th, place, in, the, latest, US,",", which, are, based, on, the, results,’s, performance,",", strength, of, schedule
