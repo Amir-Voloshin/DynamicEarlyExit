@@ -205,8 +205,10 @@ def forward(
     past_key_values_length = 0
 
     # for decoding each layers token
-    #TODO: fix hardcoding
-    tokenizer = transformers.AutoTokenizer.from_pretrained("facebook/layerskip-llama3.2-1B")
+    # TODO: fix hardcoding model name
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        "facebook/layerskip-llama3.2-1B"
+    )
 
     if past_key_values is not None:
         past_key_values_length = past_key_values[0][0].shape[2]
@@ -252,19 +254,10 @@ def forward(
         # Compute logits and predicted token for this layer
         logits = model.lm_head(hidden_states)
 
-        # filtered_logits = top_k_top_p_filtering(
-        #     logits / temperature, top_k=top_k, top_p=top_p
-        # )
-
-        # predicted_token_id = logits.argmax(dim=-1)[
-        #     :, -1
-        # ].item()  # Take the token with max probability.
-
         # Convert token ID to actual token using the tokenizer
-        predicted_token_id, _  = decode_next_token(logits, token_idx=-1)
+        predicted_token_id, _ = decode_next_token(logits, token_idx=-1)
         predicted_token = tokenizer.decode(predicted_token_id)
 
-        #print(f"Layer {layer_idx}:", predicted_token)
         predictions.append((f"Layer {layer_idx}", f"{predicted_token}"))
 
     past_key_values = past_key_values.to_legacy_cache()
