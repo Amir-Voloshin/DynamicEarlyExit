@@ -102,14 +102,19 @@ def cosine_similarity_early_exit(
         tuple: ForwardResult and layer index if exiting early, or (None, None).
     """
     if prev_hidden_states is not None:
-        # Normalizing hidden states
+
+        # llama model normalization of hidden states
         hidden_states = model.model.norm(hidden_states)
 
+        # l2 normalization for cosine similarity 
+        hidden_states_l2 = hidden_states / hidden_states.norm(dim=-1, keepdim=True)  # Shape: (batch_size, seq_length, hidden_dim)
+        prev_hidden_states_l2 = prev_hidden_states / prev_hidden_states.norm(dim=-1, keepdim=True)  # Same shape as above
+        
         # Compute cosine similarity for each token
         cosine_sim = torch.sum(
-            hidden_states * prev_hidden_states, dim=-1
+            hidden_states_l2 * prev_hidden_states_l2, dim=-1
         )  # Shape: (batch_size, seq_length)
-
+        
         # Exit early if similarity exceeds the threshold for all tokens in a batch
         if torch.all(cosine_sim > similarity_threshold):
             logits = model.lm_head(hidden_states)
