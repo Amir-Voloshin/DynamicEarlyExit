@@ -7,7 +7,12 @@
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-from .early_exit_utils import (cosine_similarity_early_exit, token_repeat_early_exit, entropy_based_early_exit, max_prob_early_exit)
+from .early_exit_utils import (
+    cosine_similarity_early_exit,
+    token_repeat_early_exit,
+    entropy_based_early_exit,
+    max_prob_early_exit,
+)
 
 import torch
 import transformers
@@ -260,11 +265,10 @@ def forward_early(
     early_exit_criteria: str = "cosine_similarity",  # "cosine_similarity" or "token_repeat"
     entropy_initial_threshold: float = 11.0,  # For entropy-based exit
     entropy_final_threshold: float = 10.5,  # For entropy-based exit
-    entropy_temp: float = 3.0, # For entropy-based exit
-    max_prob_initial_threshold=0.99, # For max-probability-based exit
+    entropy_temp: float = 3.0,  # For entropy-based exit
+    max_prob_initial_threshold=0.99,  # For max-probability-based exit
     max_prob_final_threshold=0.75,  # For max-probability-based exit
-    max_prob_scale=0.75 # For max-probability-based exit
-
+    max_prob_scale=0.75,  # For max-probability-based exit
 ) -> ForwardResult:
     """
     Forward pass with early exit based on the chosen criterion.
@@ -359,7 +363,9 @@ def forward_early(
             if result is not None:
                 return result, exited_layer
 
-            prev_hidden_states = model.model.norm(hidden_states)  # Update the previous normalized hidden states 
+            prev_hidden_states = model.model.norm(
+                hidden_states
+            )  # Update the previous normalized hidden states
 
         elif early_exit_criteria == "token_repeat":
             result, exited_layer, prev_token, token_repeats = token_repeat_early_exit(
