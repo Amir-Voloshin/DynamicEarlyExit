@@ -1,11 +1,12 @@
-# LayerSkip
-<a href='https://huggingface.co/collections/facebook/layerskip-666b25c50c8ae90e1965727a'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-blue'></a> [![License: CC BY-NC](https://img.shields.io/badge/License-CC_BY--NC-lightgrey.svg)](./LICENSE) [![YouTube](https://badges.aleen42.com/src/youtube.svg)](https://www.youtube.com/watch?v=oPxdfVVmLP8) [![arXiv](https://img.shields.io/badge/arXiv-2404.16710-b31b1b.svg)](https://arxiv.org/abs/2404.16710) [![alphaXiv](https://img.shields.io/badge/alphaXiv-2404.16710-9a2037.svg)](https://www.alphaxiv.org/abs/2404.16710)
+# Dynamic Early Exit
 
-This code base is the implementation of [LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding](https://arxiv.org/abs/2404.16710).
+This repository is built off of the repository provided for the implementation of [LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding](https://arxiv.org/abs/2404.16710).
 
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/1fdd91d9-37ea-4b42-b5be-579fb5e1f2f2" width="500">
-</div>
+Files added and/or changed from original repository:
+- self_speculation/llama_early_exit_utils.py
+- self_speculation/llama_model_utils.py
+- self_speculation/generator_basy.py
+- self_speculation/autoregressive_generator.py
 
 ## Getting Started
 - Clone repo:
@@ -152,20 +153,6 @@ $ torchrun correctness.py --model facebook/layerskip-llama2-7B \
 ## Using Docker
 
 Kindy check [DOCKER.md](DOCKER.md) to setup the project using docker
-
-## Other Implementations
-We also have other implementations of LayerSkip inference:
-- [gpt-fast](https://github.com/pytorch-labs/gpt-fast/tree/LayerSkip?tab=readme-ov-file#self-speculative-sampling): gpt-fast is a simple and efficient pytorch-native transformer text generation. We have implemented LayerSkip in the gpt-fast codebase to enable compouding it with other optimizations such as `torch.compile()`, quantization, and tensor parallelism.
-- [Native HuggingFace](https://huggingface.co/facebook/layerskip-llama2-7B#huggingface): in the model card of each of our HuggingFace models, we have provided simple code snippets that leverages HuggingFace speculative decoding capabilities using a simple trick to clone the earlier layers of the main model without cloning its weights. Although this implementation is simple and does not require implementing other functions or importing other libraries, it does not share the KV cache or execution between the draft and verification stages.
-
-## Training
-Our training implementation is work-in-progress. You can check this [pull request](https://github.com/pytorch/torchtune/pull/1076) for details and discussions.
-
-## License
-LayerSkip is licensed under CC-by-NC license. Refer to the LICENSE file in the top level directory.
-
-## Contributing
-We welcome contributions to LayerSkip. If you are interested in contributing please see [this document](./CONTRIBUTING.md).
 
 ## Citation
 If you use LayerSkip in your research, please use the following BibTex entry:

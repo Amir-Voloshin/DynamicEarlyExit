@@ -155,10 +155,6 @@ def process_cli_arguments() -> Tuple[Arguments, GenerateArguments, GenerationCon
     else:
         general_arguments.model_args = {}
 
-    # If `criteria` is specified, ensure `exit_layer` is ignored
-    # if generation_config.criteria is not None:
-    #     generation_config.exit_layer = None
-
     return general_arguments, generate_arguments, generation_config
 
 if __name__ == "__main__":
