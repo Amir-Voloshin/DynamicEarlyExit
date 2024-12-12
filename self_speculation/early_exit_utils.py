@@ -134,6 +134,59 @@ def cosine_similarity_early_exit(
 
     return None, None  # Continue processing
 
+def convergence_early_exit(
+    hidden_states: torch.Tensor,
+    prev_hidden_states: torch.Tensor,
+    model,
+    past_key_values,
+    exit_query_cache,
+    layer_idx: int,
+    delta_threshold: float = 0.01,
+) -> tuple:
+    """
+    Creates a convergence early exit strategy. When the increments in the logits confidence
+    are not bigger than 1%, it stops the generation.
+    """
+    # Skip if no previous hidden states
+    if prev_hidden_states is None:
+        return None, None
+
+    # Normalizing hidden states
+    hidden_states = model.model.norm(hidden_states)
+
+    # Get the predicted token from the current layer's hidden states
+    logits = model.lm_head(hidden_states)
+    last_token_logits = logits[:, -1, :]
+    softmax_probs = F.softmax(last_token_logits, dim=-1)
+    predicted_token_prob = softmax_probs.max().item()
+
+    # Print the softmax probability of the predicted token
+    # print(f"Layer {layer_idx}: Predicted token softmax probability: {predicted_token_prob:.4f}")
+
+    # Store probabilities per layer
+    if not hasattr(convergence_early_exit, 'layer_probs'):
+        convergence_early_exit.layer_probs = {}
+    
+    convergence_early_exit.layer_probs[layer_idx] = predicted_token_prob
+
+    # Check convergence only after a few layers
+    if layer_idx >= 2:
+        prev_layer_prob = convergence_early_exit.layer_probs.get(layer_idx - 1, 0)
+        # print(f"Layer {layer_idx}: Predicted prev token softmax probability: {prev_layer_prob:.4f}")
+        confidence_increment = abs(predicted_token_prob - prev_layer_prob)
+        
+        # print(f"{confidence_increment=}")
+        if abs(confidence_increment) <= delta_threshold:
+            # print(f"Early exit at layer {layer_idx} with confidence increment {confidence_increment:.4f}")
+            return (
+                ForwardResult(
+                    logits=logits,
+                    past_key_values=past_key_values,
+                    exit_query_cache=exit_query_cache,
+                ),
+                layer_idx,
+            )
+    return None, None
 
 def max_prob_early_exit(
     hidden_states: torch.Tensor,
