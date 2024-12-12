@@ -3,22 +3,25 @@
 This repository is built off of the repository provided for the implementation of [LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding](https://arxiv.org/abs/2404.16710).
 
 Files added and/or changed from original repository:
-- self_speculation/llama_early_exit_utils.py
+- self_speculation/early_exit_utils.py
 - self_speculation/llama_model_utils.py
 - self_speculation/generator_basy.py
 - self_speculation/autoregressive_generator.py
 
+Authors: Juan D. Castano, Amir Voloshin, Daniel Carrera
+Contact: {jcastano31, avoloshin3, dlavao3}@gatech.edu
+
 ## Getting Started
 - Clone repo:
 ```console
-$ git clone git@github.com:facebookresearch/LayerSkip.git
-$ cd LayerSkip
+$ git clone https://github.com/Amir-Voloshin/DynamicEarlyExit.git
+$ cd DynamicEarlyExit
 ```
 
 - Setup environment:
 ```console
 $ conda create --name layer_skip python=3.10
-$ conda activate layer_skip
+$ conda activate dynamic_early_exit
 
 $ pip install -r requirements.txt
 ```
@@ -63,7 +66,7 @@ $ torchrun generate.py --model facebook/layerskip-llama2-7B \
 ```
 
 Tips:
-- You may change `--model` to any HuggingFace model but in order to observe speedup with self-speculative decoding, use a model trained using the LayerSkip recipe, such as those we have [open sourced on HuggingFace](https://huggingface.co/collections/facebook/layerskip-666b25c50c8ae90e1965727a).
+- You may change `--model` to any HuggingFace model 
 - By default we enable sampling. You may change the sampling behaviour using the `--sample`, `--temperature`, `--top_p`, and `--top_k` arguments.
 - You may run `python generate.py --help` for details on different command-line arguments.
 
@@ -76,7 +79,7 @@ $ torchrun benchmark.py --model facebook/layerskip-llama2-7B \
     --dataset cnn_dm_summarization \
     --num_samples 100 \
     --generation_strategy autoregressive \
-    --exit_layer 8 \
+    --exit_layer 16 \
     --num_speculations 6 \
     --output_dir ./logs
 ```
@@ -90,27 +93,6 @@ Tips:
 - By default, the tasks run as 0-shot. You can change to any specified `n`-shot by specifying the `--n_shot` argument.
 - By default we enable sampling, while the results reported in the paper were greedy decoding without sampling. You may change the sampling behaviour using the `--sample`, `--temperature`, `--top_p`, and `--top_k` arguments.
 - You may run `python benchmark.py --help` for details on different command-line arguments.
-
-## Evaluate
-
-We have integrated our generation scripts with [Eleuther Language Model Evaluation Harness](https://github.com/EleutherAI/lm-evaluation-harness/tree/main) to enable a large number of tasks and properly post-process generated text.
-
-```console
-$ torchrun eval.py --model facebook/layerskip-llama2-7B \
-    --tasks gsm8k \
-    --limit 10 \
-    --generation_strategy autoregressive \
-    --exit_layer 8 \
-    --num_speculations 6 \
-    --output_dir ./logs
-```
-
-Tips:
-- Note that with speculative decoding we can only obtain speedups from generation tasks (e.g., `gsm8k` or `cnn_dailymail`), while classificaton tasks, i.e., multiple choice question tasks (e.g., `piqa`, `social_iqa`) or True/False question tasks (e.g., `boolq`) will not lead to speedup.
-- You can specify arbitrary number of tasks supported by Eleuther Evaluation Harness using the `--tasks` argument. To get a list of all of possible tasks, check this [link](https://github.com/EleutherAI/lm-evaluation-harness/tree/main/lm_eval/tasks).
-- Similar to the `generate.py` and `benchmark.py` scripts, you may specify different models, datasets, and sampling parameters
-- You may run `python benchmark.py --help` for details on different command-line arguments.
-
 
 ## Using Docker
 
