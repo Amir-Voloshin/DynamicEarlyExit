@@ -51,14 +51,14 @@ $ torchrun generate.py --model facebook/layerskip-llama2-7B \
     --max_steps 512
 ```
 
-In order to observe speedup, you need to use self-speculative decoding to generate tokens, and specify `--exit_layer`, the layer the draft stage to exit at, and `--num_speculations`, the number of draft tokens:
+To perform dynamic early exit, you need to specify `--criteria`:
 ```console
 $ torchrun generate.py --model facebook/layerskip-llama2-7B \
     --sample True \
     --max_steps 512 \
-    --generation_strategy self_speculative \
-    --exit_layer 8 \
-    --num_speculations 6
+    --generation_strategy autoregressive \
+    --exit_layer 16 \
+    --criteria "cosine_similarity"
 ```
 
 Tips:
@@ -74,7 +74,7 @@ To benchmark on a dataset:
 $ torchrun benchmark.py --model facebook/layerskip-llama2-7B \
     --dataset cnn_dm_summarization \
     --num_samples 100 \
-    --generation_strategy self_speculative \
+    --generation_strategy autoregressive \
     --exit_layer 8 \
     --num_speculations 6 \
     --output_dir ./logs
@@ -98,7 +98,7 @@ We have integrated our generation scripts with [Eleuther Language Model Evaluati
 $ torchrun eval.py --model facebook/layerskip-llama2-7B \
     --tasks gsm8k \
     --limit 10 \
-    --generation_strategy self_speculative \
+    --generation_strategy autoregressive \
     --exit_layer 8 \
     --num_speculations 6 \
     --output_dir ./logs
@@ -137,37 +137,9 @@ Tips:
 - Similar to the `generate.py` and `benchmark.py` scripts, you may specify different models, datasets, and sampling parameters
 - You may run `python sweep.py --help` for details on different command-line arguments.
 
-## Correctness
-In order to verify that the generated tokens of our self-speculative decoding algorithm are correct, we have created a script to compare the outputs of autoregressive decoding with self-speculative decoding. Note that the outputs we can only guarantee equivalence when there is no sampling (i.e., `--sample False`): 
-```console
-$ torchrun correctness.py --model facebook/layerskip-llama2-7B \
-    --dataset human_eval \
-    --generation_strategy self_speculative \
-    --num_speculations 6 \
-    --exit_layer 4 \
-    --num_samples 10 \
-    --sample False \
-    --output_dir ./logs
-```
+
 
 ## Using Docker
 
-Kindy check [DOCKER.md](DOCKER.md) to setup the project using docker
+Kindly check [DOCKER.md](DOCKER.md) to setup the project using docker
 
-## Citation
-If you use LayerSkip in your research, please use the following BibTex entry:
-
-```bibtex
-@misc{layerskip,
-    title={LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding},
-    author={Mostafa Elhoushi and Akshat Shrivastava and Diana Liskovich and Basil Hosmer and Bram Wasti and Liangzhen Lai and Anas Mahmoud and Bilge Acun and Saurabh Agarwal and Ahmed Roman and Ahmed A Aly and Beidi Chen and Carole-Jean Wu},
-    booktitle = "Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
-    month = aug,
-    year = "2024",
-    address = "Bangkok, Thailand",
-    publisher = "Association for Computational Linguistics",
-    url = "https://aclanthology.org/2024.acl-long.681",
-    doi = "10.18653/v1/2024.acl-long.681",
-    pages = "12622--12642",
-}
-```
