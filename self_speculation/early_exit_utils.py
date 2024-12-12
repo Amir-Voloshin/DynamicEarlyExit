@@ -102,12 +102,21 @@ def cosine_similarity_early_exit(
         tuple: ForwardResult and layer index if exiting early, or (None, None).
     """
     if prev_hidden_states is not None:
-        # Normalizing hidden states
+
+        # llama model normalization of hidden states
         hidden_states = model.model.norm(hidden_states)
+
+        # l2 normalization for cosine similarity
+        hidden_states_l2 = hidden_states / hidden_states.norm(
+            dim=-1, keepdim=True
+        )  # Shape: (batch_size, seq_length, hidden_dim)
+        prev_hidden_states_l2 = prev_hidden_states / prev_hidden_states.norm(
+            dim=-1, keepdim=True
+        )  # Same shape as above
 
         # Compute cosine similarity for each token
         cosine_sim = torch.sum(
-            hidden_states * prev_hidden_states, dim=-1
+            hidden_states_l2 * prev_hidden_states_l2, dim=-1
         )  # Shape: (batch_size, seq_length)
 
         # Exit early if similarity exceeds the threshold for all tokens in a batch
@@ -207,9 +216,10 @@ def max_prob_early_exit(
     Returns:
         tuple: ForwardResult and layer index if exiting early, else (None, None).
     """
+
     def dynamic_max_prob_threshold(layer_idx, max_layers, initial, final, scale):
         layer_ratio = (max_layers - layer_idx) / max_layers
-        return initial * (layer_ratio ** scale) + final * (1 - layer_ratio ** scale)
+        return initial * (layer_ratio**scale) + final * (1 - layer_ratio**scale)
 
     max_prob_threshold = dynamic_max_prob_threshold(
         layer_idx, max_layers, initial_threshold, final_threshold, scale
@@ -230,11 +240,6 @@ def max_prob_early_exit(
     # Compute log probabilities
     log_probs = torch.log(softmax_probs)
 
-    # Debugging logs
-    # print(f"Layer {layer_idx}: Max Prob Threshold = {max_prob_threshold:.4f}")
-    # print(f"Softmax probabilities (min: {softmax_probs.min().item()}, max: {softmax_probs.max().item()})")
-    # print(f"Softmax sum: {softmax_probs.sum(dim=-1).mean().item()}")
-
     # Find the token with the maximum probability
     max_prob, max_prob_token = torch.max(softmax_probs, dim=-1)
 
@@ -250,22 +255,22 @@ def max_prob_early_exit(
                     exit_query_cache=exit_query_cache,
                 ),
                 layer_idx,
-                max_prob_token.item()  # Return the token index
+                max_prob_token.item(),  # Return the token index
             )
 
     return None, None, None
 
 
 def entropy_based_early_exit(
-        hidden_states: torch.Tensor,
-        model,
-        past_key_values,
-        exit_query_cache,
-        layer_idx: int,
-        max_layers: int,
-        initial_threshold: float = 11.0,
-        final_threshold: float = 10.5,
-        temperature: float = 3.0
+    hidden_states: torch.Tensor,
+    model,
+    past_key_values,
+    exit_query_cache,
+    layer_idx: int,
+    max_layers: int,
+    initial_threshold: float = 11.0,
+    final_threshold: float = 10.5,
+    temperature: float = 3.0,
 ) -> tuple:
     """
     Uses entropy to determine early exit, with a decreasing threshold as the network progresses.
@@ -287,9 +292,11 @@ def entropy_based_early_exit(
 
     def dynamic_threshold(layer_idx, max_layers, initial, final, steepness=0.5):
         scale = (max_layers - layer_idx) / max_layers
-        return initial * (scale ** steepness) + final * (1 - scale ** steepness)
+        return initial * (scale**steepness) + final * (1 - scale**steepness)
 
-    threshold = dynamic_threshold(layer_idx, max_layers, initial_threshold, final_threshold)
+    threshold = dynamic_threshold(
+        layer_idx, max_layers, initial_threshold, final_threshold
+    )
 
     # Normalize hidden states and compute logits
     hidden_states = model.model.norm(hidden_states)
@@ -297,19 +304,17 @@ def entropy_based_early_exit(
 
     # Stabilized entropy calculation
     stabilized_logits = (logits - logits.max(dim=-1, keepdim=True).values) / temperature
-    softmax_probs = torch.softmax(stabilized_logits, dim=-1).float()  # Cast back to float32
-    softmax_probs = torch.clamp(softmax_probs, min=1e-12)  # Ensure no probabilities are too small
+    softmax_probs = torch.softmax(
+        stabilized_logits, dim=-1
+    ).float()  # Cast back to float32
+    softmax_probs = torch.clamp(
+        softmax_probs, min=1e-12
+    )  # Ensure no probabilities are too small
     log_probs = torch.log(softmax_probs)
     entropy = -torch.sum(softmax_probs * log_probs, dim=-1).mean()
 
-    # Debugging logs
-    # print(f"Layer {layer_idx}: Entropy = {entropy.item():.4f}, Threshold = {threshold:.4f}")
-    # print(f"Softmax probabilities (min: {softmax_probs.min().item()}, max: {softmax_probs.max().item()})")
-    # print(f"Softmax sum: {softmax_probs.sum(dim=-1).mean().item()}")
-
     # Check for entropy threshold
     if entropy < threshold:
-        # print(f"Early exit at Layer {layer_idx} with entropy = {entropy:.4f}")
         return (
             ForwardResult(
                 logits=logits,

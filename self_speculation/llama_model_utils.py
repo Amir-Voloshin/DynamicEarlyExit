@@ -269,11 +269,10 @@ def forward_early(
     final_threshold: float = 0.5,  # For entropy-based exit
     entropy_initial_threshold: float = 11.0,  # For entropy-based exit
     entropy_final_threshold: float = 10.5,  # For entropy-based exit
-    entropy_temp: float = 3.0, # For entropy-based exit
-    max_prob_initial_threshold=0.99, # For max-probability-based exit
+    entropy_temp: float = 3.0,  # For entropy-based exit
+    max_prob_initial_threshold=0.99,  # For max-probability-based exit
     max_prob_final_threshold=0.75,  # For max-probability-based exit
-    max_prob_scale=0.75 # For max-probability-based exit
-
+    max_prob_scale=0.75,  # For max-probability-based exit
 ) -> ForwardResult:
     """
     Forward pass with early exit based on the chosen criterion.
@@ -368,7 +367,9 @@ def forward_early(
             if result is not None:
                 return result, exited_layer
 
-            prev_hidden_states = hidden_states  # Update the previous hidden states
+            prev_hidden_states = model.model.norm(
+                hidden_states
+            )  # Update the previous normalized hidden states
 
         elif early_exit_criteria == "token_repeat":
             result, exited_layer, prev_token, token_repeats = token_repeat_early_exit(
