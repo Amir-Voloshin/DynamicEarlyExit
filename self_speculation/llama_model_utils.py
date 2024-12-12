@@ -8,11 +8,12 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 from .early_exit_utils import (
-    cosine_similarity_early_exit,
+    cosine_similarity_early_exit, 
     token_repeat_early_exit,
+    convergence_early_exit,
     entropy_based_early_exit,
     max_prob_early_exit,
-)
+    )
 
 import torch
 import transformers
@@ -261,8 +262,11 @@ def forward_early(
     exit_layer: int,
     exit_query_cache: Optional[List[torch.Tensor]] = None,
     similarity_threshold: float = 0.95,
-    repeats: int = 4,  # Threshold for repeated tokens
-    early_exit_criteria: str = "cosine_similarity",  # "cosine_similarity" or "token_repeat"
+    repeats: int = 3,  # Threshold for repeated tokens
+    delta_threshold: float = 0.01,
+    early_exit_criteria: str = "entropy_based",  # "cosine_similarity", "token_repeat" or "convergence"
+    initial_threshold: float = 2.0,  # For entropy-based exit
+    final_threshold: float = 0.5,  # For entropy-based exit
     entropy_initial_threshold: float = 11.0,  # For entropy-based exit
     entropy_final_threshold: float = 10.5,  # For entropy-based exit
     entropy_temp: float = 3.0,  # For entropy-based exit
@@ -417,6 +421,20 @@ def forward_early(
 
             prev_hidden_states = hidden_states  # Update the previous hidden states
 
+        elif early_exit_criteria == "convergence":
+            result, exited_layer = convergence_early_exit(
+                hidden_states=hidden_states,
+                prev_hidden_states=prev_hidden_states,
+                model=model,
+                past_key_values=past_key_values,
+                exit_query_cache=exit_query_cache,
+                layer_idx=layer_idx,
+                delta_threshold=delta_threshold,
+            )
+            if result is not None:
+                return result, exited_layer
+
+            prev_hidden_states = hidden_states  # Update the previous hidden states
         else:
             raise ValueError(f"Unsupported early exit criteria: {early_exit_criteria}")
 
