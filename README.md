@@ -44,14 +44,15 @@ Once you run those steps, the commands below to run the LayerSkip checkpoints sh
 
 ## Generate
 
-To run one of our models in interactive mode using regular autoregressive decoding:
+To run a model in interactive mode using regular autoregressive decoding:
 ```console
 $ torchrun generate.py --model facebook/layerskip-llama2-7B \
     --sample True \
     --max_steps 512
 ```
 
-To perform dynamic early exit, you need to specify `--criteria`:
+To perform dynamic early exit, you need to specify `--criteria`. Criteria options are: "cosine_similarity", "token_repeat", "entropy_based", "max_probability", or "convergence".
+
 ```console
 $ torchrun generate.py --model facebook/layerskip-llama2-7B \
     --sample True \
@@ -109,34 +110,6 @@ Tips:
 - You can specify arbitrary number of tasks supported by Eleuther Evaluation Harness using the `--tasks` argument. To get a list of all of possible tasks, check this [link](https://github.com/EleutherAI/lm-evaluation-harness/tree/main/lm_eval/tasks).
 - Similar to the `generate.py` and `benchmark.py` scripts, you may specify different models, datasets, and sampling parameters
 - You may run `python benchmark.py --help` for details on different command-line arguments.
-
-## Sweep
-Our inference hyperparameters, `exit_layer` and `num_speculations` determine the speedup during inference:
-- `exit_layer`:
-    - smaller means a faster but less accurate draft stage
-    - larger means a more accurate but slower draft stage
-- `num_speculations`:
-    - smaller means higher acceptance rate but verification stage will amortize less the draft stage
-    - learger means verification stage will better amortize the draft stage but acceptance rate decreases
-
-The optimal combination of `exit_layer` and `num_speculations` may change with the model, dataset and sampling parameters. Hence, we provided a script to sweep over a grid of different `exit_layer` and `num_speculations`:
-
-```console
-$ torchrun sweep.py --model facebook/layerskip-llama2-7B \
-    --dataset human_eval \
-    --generation_strategy self_speculative \
-    --num_samples 150 \
-    --max_steps 256 \
-    --output_dir ./logs/ \
-    --sample False
-```
-
-This will create a CSV file in the directory specified in the `--outpu_dir` argument.
-
-Tips:
-- Similar to the `generate.py` and `benchmark.py` scripts, you may specify different models, datasets, and sampling parameters
-- You may run `python sweep.py --help` for details on different command-line arguments.
-
 
 
 ## Using Docker
