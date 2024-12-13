@@ -1,23 +1,30 @@
-# LayerSkip
-<a href='https://huggingface.co/collections/facebook/layerskip-666b25c50c8ae90e1965727a'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-blue'></a> [![License: CC BY-NC](https://img.shields.io/badge/License-CC_BY--NC-lightgrey.svg)](./LICENSE) [![YouTube](https://badges.aleen42.com/src/youtube.svg)](https://www.youtube.com/watch?v=oPxdfVVmLP8) [![arXiv](https://img.shields.io/badge/arXiv-2404.16710-b31b1b.svg)](https://arxiv.org/abs/2404.16710) [![alphaXiv](https://img.shields.io/badge/alphaXiv-2404.16710-9a2037.svg)](https://www.alphaxiv.org/abs/2404.16710)
+# Dynamic Early Exit
+This repository implements a dynamic early exit strategy aiming to enhance the computational efficiency of large language models (LLMs) while maintaining prediction quality. The framework extends the LayerSkip methodology with novel heuristics, including Repeated Tokens, Cosine Similarity, Token Confidence Convergence, Adaptive Convergence, Entropy-Based Threshold, and Max Probability, to determine stabilization in token predictions. 
 
-This code base is the implementation of [LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding](https://arxiv.org/abs/2404.16710).
+This repository is built off of the repository provided for the implementation of [LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding](https://arxiv.org/abs/2404.16710).
 
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/1fdd91d9-37ea-4b42-b5be-579fb5e1f2f2" width="500">
-</div>
+Files added and/or changed from original repository:
+- self_speculation/early_exit_utils.py
+- self_speculation/llama_model_utils.py
+- self_speculation/generator_basy.py
+- self_speculation/autoregressive_generator.py
+
+Authors: 
+- Juan D. Castano (j.castano@utp.edu.co)
+- Amir Voloshin (amirvolo@gmail.com)
+- Daniel Carrera (danielcarrera281@gmail.com)
 
 ## Getting Started
 - Clone repo:
 ```console
-$ git clone git@github.com:facebookresearch/LayerSkip.git
-$ cd LayerSkip
+$ git clone https://github.com/Amir-Voloshin/DynamicEarlyExit.git
+$ cd DynamicEarlyExit
 ```
 
 - Setup environment:
 ```console
 $ conda create --name layer_skip python=3.10
-$ conda activate layer_skip
+$ conda activate dynamic_early_exit
 
 $ pip install -r requirements.txt
 ```
@@ -43,25 +50,26 @@ Once you run those steps, the commands below to run the LayerSkip checkpoints sh
 
 ## Generate
 
-To run one of our models in interactive mode using regular autoregressive decoding:
+To run a model in interactive mode using regular autoregressive decoding:
 ```console
 $ torchrun generate.py --model facebook/layerskip-llama2-7B \
     --sample True \
     --max_steps 512
 ```
 
-In order to observe speedup, you need to use self-speculative decoding to generate tokens, and specify `--exit_layer`, the layer the draft stage to exit at, and `--num_speculations`, the number of draft tokens:
+To perform dynamic early exit, you need to specify `--criteria`. Criteria options are: "cosine_similarity", "token_repeat", "entropy_based", "max_probability", or "convergence".
+
 ```console
 $ torchrun generate.py --model facebook/layerskip-llama2-7B \
     --sample True \
     --max_steps 512 \
-    --generation_strategy self_speculative \
-    --exit_layer 8 \
-    --num_speculations 6
+    --generation_strategy autoregressive \
+    --exit_layer 16 \
+    --criteria "cosine_similarity"
 ```
 
 Tips:
-- You may change `--model` to any HuggingFace model but in order to observe speedup with self-speculative decoding, use a model trained using the LayerSkip recipe, such as those we have [open sourced on HuggingFace](https://huggingface.co/collections/facebook/layerskip-666b25c50c8ae90e1965727a).
+- You may change `--model` to any HuggingFace model 
 - By default we enable sampling. You may change the sampling behaviour using the `--sample`, `--temperature`, `--top_p`, and `--top_k` arguments.
 - You may run `python generate.py --help` for details on different command-line arguments.
 
@@ -73,8 +81,8 @@ To benchmark on a dataset:
 $ torchrun benchmark.py --model facebook/layerskip-llama2-7B \
     --dataset cnn_dm_summarization \
     --num_samples 100 \
-    --generation_strategy self_speculative \
-    --exit_layer 8 \
+    --generation_strategy autoregressive \
+    --exit_layer 16 \
     --num_speculations 6 \
     --output_dir ./logs
 ```
@@ -89,98 +97,7 @@ Tips:
 - By default we enable sampling, while the results reported in the paper were greedy decoding without sampling. You may change the sampling behaviour using the `--sample`, `--temperature`, `--top_p`, and `--top_k` arguments.
 - You may run `python benchmark.py --help` for details on different command-line arguments.
 
-## Evaluate
-
-We have integrated our generation scripts with [Eleuther Language Model Evaluation Harness](https://github.com/EleutherAI/lm-evaluation-harness/tree/main) to enable a large number of tasks and properly post-process generated text.
-
-```console
-$ torchrun eval.py --model facebook/layerskip-llama2-7B \
-    --tasks gsm8k \
-    --limit 10 \
-    --generation_strategy self_speculative \
-    --exit_layer 8 \
-    --num_speculations 6 \
-    --output_dir ./logs
-```
-
-Tips:
-- Note that with speculative decoding we can only obtain speedups from generation tasks (e.g., `gsm8k` or `cnn_dailymail`), while classificaton tasks, i.e., multiple choice question tasks (e.g., `piqa`, `social_iqa`) or True/False question tasks (e.g., `boolq`) will not lead to speedup.
-- You can specify arbitrary number of tasks supported by Eleuther Evaluation Harness using the `--tasks` argument. To get a list of all of possible tasks, check this [link](https://github.com/EleutherAI/lm-evaluation-harness/tree/main/lm_eval/tasks).
-- Similar to the `generate.py` and `benchmark.py` scripts, you may specify different models, datasets, and sampling parameters
-- You may run `python benchmark.py --help` for details on different command-line arguments.
-
-## Sweep
-Our inference hyperparameters, `exit_layer` and `num_speculations` determine the speedup during inference:
-- `exit_layer`:
-    - smaller means a faster but less accurate draft stage
-    - larger means a more accurate but slower draft stage
-- `num_speculations`:
-    - smaller means higher acceptance rate but verification stage will amortize less the draft stage
-    - learger means verification stage will better amortize the draft stage but acceptance rate decreases
-
-The optimal combination of `exit_layer` and `num_speculations` may change with the model, dataset and sampling parameters. Hence, we provided a script to sweep over a grid of different `exit_layer` and `num_speculations`:
-
-```console
-$ torchrun sweep.py --model facebook/layerskip-llama2-7B \
-    --dataset human_eval \
-    --generation_strategy self_speculative \
-    --num_samples 150 \
-    --max_steps 256 \
-    --output_dir ./logs/ \
-    --sample False
-```
-
-This will create a CSV file in the directory specified in the `--outpu_dir` argument.
-
-Tips:
-- Similar to the `generate.py` and `benchmark.py` scripts, you may specify different models, datasets, and sampling parameters
-- You may run `python sweep.py --help` for details on different command-line arguments.
-
-## Correctness
-In order to verify that the generated tokens of our self-speculative decoding algorithm are correct, we have created a script to compare the outputs of autoregressive decoding with self-speculative decoding. Note that the outputs we can only guarantee equivalence when there is no sampling (i.e., `--sample False`): 
-```console
-$ torchrun correctness.py --model facebook/layerskip-llama2-7B \
-    --dataset human_eval \
-    --generation_strategy self_speculative \
-    --num_speculations 6 \
-    --exit_layer 4 \
-    --num_samples 10 \
-    --sample False \
-    --output_dir ./logs
-```
-
 ## Using Docker
 
-Kindy check [DOCKER.md](DOCKER.md) to setup the project using docker
+Kindly check [DOCKER.md](DOCKER.md) to setup the project using docker
 
-## Other Implementations
-We also have other implementations of LayerSkip inference:
-- [gpt-fast](https://github.com/pytorch-labs/gpt-fast/tree/LayerSkip?tab=readme-ov-file#self-speculative-sampling): gpt-fast is a simple and efficient pytorch-native transformer text generation. We have implemented LayerSkip in the gpt-fast codebase to enable compouding it with other optimizations such as `torch.compile()`, quantization, and tensor parallelism.
-- [Native HuggingFace](https://huggingface.co/facebook/layerskip-llama2-7B#huggingface): in the model card of each of our HuggingFace models, we have provided simple code snippets that leverages HuggingFace speculative decoding capabilities using a simple trick to clone the earlier layers of the main model without cloning its weights. Although this implementation is simple and does not require implementing other functions or importing other libraries, it does not share the KV cache or execution between the draft and verification stages.
-
-## Training
-Our training implementation is work-in-progress. You can check this [pull request](https://github.com/pytorch/torchtune/pull/1076) for details and discussions.
-
-## License
-LayerSkip is licensed under CC-by-NC license. Refer to the LICENSE file in the top level directory.
-
-## Contributing
-We welcome contributions to LayerSkip. If you are interested in contributing please see [this document](./CONTRIBUTING.md).
-
-## Citation
-If you use LayerSkip in your research, please use the following BibTex entry:
-
-```bibtex
-@misc{layerskip,
-    title={LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding},
-    author={Mostafa Elhoushi and Akshat Shrivastava and Diana Liskovich and Basil Hosmer and Bram Wasti and Liangzhen Lai and Anas Mahmoud and Bilge Acun and Saurabh Agarwal and Ahmed Roman and Ahmed A Aly and Beidi Chen and Carole-Jean Wu},
-    booktitle = "Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
-    month = aug,
-    year = "2024",
-    address = "Bangkok, Thailand",
-    publisher = "Association for Computational Linguistics",
-    url = "https://aclanthology.org/2024.acl-long.681",
-    doi = "10.18653/v1/2024.acl-long.681",
-    pages = "12622--12642",
-}
-```
