@@ -1,5 +1,5 @@
 # Dynamic Early Exit
-This repository implements a dynamic early exit strategy aiming to enhance the computational efficiency of large language models (LLMs) while maintaining prediction quality. The framework extends the LayerSkip methodology with novel heuristics, including Repeated Tokens, Cosine Similarity, Token Confidence Convergence, Adaptive Convergence, Entropy-Based Threshold, and Max Probability, to determine stabilization in token predictions. 
+This repository implements a dynamic early exit strategy aiming to enhance the computational efficiency of large language models (LLMs) while maintaining prediction quality. The framework extends the LayerSkip methodology with novel heuristics, including Repeated Tokens, Cosine Similarity, Token Confidence Convergence, Entropy-Based Threshold, and Max Probability, to determine stabilization in token predictions. 
 
 This repository is built off of the repository provided for the implementation of [LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding](https://arxiv.org/abs/2404.16710).
 
