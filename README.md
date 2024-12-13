@@ -52,7 +52,7 @@ Once you run those steps, the commands below to run the LayerSkip checkpoints sh
 
 To run a model in interactive mode using regular autoregressive decoding:
 ```console
-$ torchrun generate.py --model facebook/layerskip-llama2-7B \
+$ torchrun generate.py --model facebook/layerskip-llama3.2-1B \
     --sample True \
     --max_steps 512
 ```
@@ -60,11 +60,10 @@ $ torchrun generate.py --model facebook/layerskip-llama2-7B \
 To perform dynamic early exit, you need to specify `--criteria`. Criteria options are: "cosine_similarity", "token_repeat", "entropy_based", "max_probability", or "convergence".
 
 ```console
-$ torchrun generate.py --model facebook/layerskip-llama2-7B \
+$ torchrun generate.py --model facebook/layerskip-llama3.2-1B \
     --sample True \
     --max_steps 512 \
     --generation_strategy autoregressive \
-    --exit_layer 16 \
     --criteria "cosine_similarity"
 ```
 
@@ -78,12 +77,10 @@ Tips:
 To benchmark on a dataset:
 
 ```console
-$ torchrun benchmark.py --model facebook/layerskip-llama2-7B \
+$ torchrun benchmark.py --model facebook/layerskip-llama3.2-1B \
     --dataset cnn_dm_summarization \
     --num_samples 100 \
     --generation_strategy autoregressive \
-    --exit_layer 16 \
-    --num_speculations 6 \
     --output_dir ./logs
 ```
 
