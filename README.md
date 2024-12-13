@@ -1,4 +1,5 @@
 # Dynamic Early Exit
+This repository implements a dynamic early exit strategy aiming to enhance the computational efficiency of large language models (LLMs) while maintaining prediction quality. The framework extends the LayerSkip methodology with novel heuristics, including Repeated Tokens, Cosine Similarity, Token Confidence Convergence, Adaptive Convergence, Entropy-Based Threshold, and Max Probability, to determine stabilization in token predictions. 
 
 This repository is built off of the repository provided for the implementation of [LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding](https://arxiv.org/abs/2404.16710).
 
@@ -8,8 +9,10 @@ Files added and/or changed from original repository:
 - self_speculation/generator_basy.py
 - self_speculation/autoregressive_generator.py
 
-Authors: Juan D. Castano, Amir Voloshin, Daniel Carrera
-Contact: {jcastano31, avoloshin3, dlavao3}@gatech.edu
+Authors: 
+- Juan D. Castano (j.castano@utp.edu.co)
+- Amir Voloshin (amirvolo@gmail.com)
+- Daniel Carrera (danielcarrera281@gmail.com)
 
 ## Getting Started
 - Clone repo:
